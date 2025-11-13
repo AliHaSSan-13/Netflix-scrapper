@@ -1,0 +1,80 @@
+{
+  "net20.cc": {
+    "host": "net20.cc",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "accept-language": "en-US,en;q=0.5",
+    "accept-encoding": "gzip, deflate, br, zstd",
+    "referer": "https://net20.cc/home",
+    "upgrade-insecure-requests": "1",
+    "sec-fetch-dest": "document",
+    "sec-fetch-mode": "navigate",
+    "sec-fetch-site": "same-origin",
+    "sec-fetch-user": "?1",
+    "connection": "keep-alive",
+    "cookie": "user_token=29bb845a66aa3ea49b7e0e3978c94512; HstCfa1190725=1760801564793; HstCmu1190725=1760801564793; c_ref_1190725=https%3A%2F%2Faccounts.google.com%2F; t_hash=8e45cb69b2b4ec3d15802de127c7a1c5%3A%3A1762255784%3A%3Akp; lang=eng; SE80189685=80189599; recentplay=SE80189685; 80189599=121%3A3701; t_hash_t=187e56c6f023d31279392cb807f52d04%3A%3A4f1d08b1ff693b3517074deda516168b%3A%3A1762332230%3A%3Akp; _cc_id=52e87b1e8b85515ef7fca15ddda66e30; panoramaId_expiry=1762497824142; panoramaId=3d06415ea3b7e7238acfe966086da9fb927a4078e05ce5f4516474dbfe1391d8; panoramaIdType=panoDevice; HstCla1190725=1762412568484; HstPn1190725=8; HstPt1190725=45; HstCnv1190725=6; HstCns1190725=21; __dtsu=4C301762258225CB176FEB3BCC3AAF88"
+  },
+  "i0.wp.com": {
+    "host": "i0.wp.com",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "accept": "image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5",
+    "accept-language": "en-US,en;q=0.5",
+    "accept-encoding": "gzip, deflate, br, zstd",
+    "referer": "https://net20.cc/",
+    "sec-fetch-dest": "image",
+    "sec-fetch-mode": "no-cors",
+    "sec-fetch-site": "cross-site",
+    "connection": "keep-alive"
+  },
+  "s4.histats.com": {
+    "host": "s4.histats.com",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "accept": "*/*",
+    "accept-language": "en-US,en;q=0.5",
+    "accept-encoding": "gzip, deflate, br, zstd",
+    "referer": "https://net20.cc/",
+    "sec-fetch-dest": "script",
+    "sec-fetch-mode": "no-cors",
+    "sec-fetch-site": "cross-site",
+    "connection": "keep-alive"
+  },
+  "e.dtscout.com": {
+    "host": "e.dtscout.com",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "accept": "*/*",
+    "accept-language": "en-US,en;q=0.5",
+    "accept-encoding": "gzip, deflate, br, zstd",
+    "referer": "https://net20.cc/",
+    "sec-fetch-dest": "script",
+    "sec-fetch-mode": "no-cors",
+    "sec-fetch-site": "cross-site",
+    "connection": "keep-alive",
+    "cookie": "df=1762258225; l=4C301762258225CB176FEB3BCC3AAF88"
+  },
+  "t.dtscdn.com": {
+    "host": "t.dtscdn.com",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "accept": "*/*",
+    "accept-language": "en-US,en;q=0.5",
+    "accept-encoding": "gzip, deflate, br, zstd",
+    "referer": "https://net20.cc/",
+    "sec-fetch-dest": "script",
+    "sec-fetch-mode": "no-cors",
+    "sec-fetch-site": "cross-site",
+    "connection": "keep-alive",
+    "cookie": "uid=4C301762258225CB176FEB3BCC3AAF88"
+  },
+  "t.dtscout.com": {
+    "host": "t.dtscout.com",
+    "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+    "accept": "*/*",
+    "accept-language": "en-US,en;q=0.5",
+    "accept-encoding": "gzip, deflate, br, zstd",
+    "referer": "https://net20.cc/",
+    "sec-fetch-dest": "script",
+    "sec-fetch-mode": "no-cors",
+    "sec-fetch-site": "cross-site",
+    "connection": "keep-alive",
+    "cookie": "df=1762258225; l=4C301762258225CB176FEB3BCC3AAF88"
+  }
+}
