@@ -36,3 +36,4 @@ Call log:
     raise Exception("Failed to authenticate or bypass verification")
 Exception: Failed to authenticate or bypass verification
 
+2025-11-13 15:59:11,039 - netflix_scraper - ERROR - ❌ An unexpected error occurred during navigation or authentication: Page.wait_for_selector: Target page, context or browser has been closed

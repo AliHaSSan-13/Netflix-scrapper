@@ -1,6 +1,16 @@
+import os
 from .logger import logger
 
 class UIManager:
+    def get_download_path(self):
+        """Get and validate the download path from the user."""
+        while True:
+            download_path = input("Enter the path to store the videos: ").strip()
+            if os.path.isdir(download_path):
+                return download_path
+            else:
+                logger.warning("Invalid path! Please enter a valid directory path.")
+
     def __init__(self, page):
         self.page = page
 

@@ -34,6 +34,8 @@ class BrowserManager:
                 ignore_https_errors=True, 
             )
             
+            await self.context.route("**/*.{png,jpg,jpeg,webp,svg}", lambda route: route.abort())
+            
             await self.context.add_init_script("""
                 Object.defineProperty(navigator, 'webdriver', {
                     get: () => undefined,
