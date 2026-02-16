@@ -213,4 +213,50 @@ The target site’s DOM may have changed; update selectors in:
 - `src/netflix_scraper/scraper.py`
 
 ## License
-# MIT LICENSE
+
+This project is licensed under the **MIT License** – see below for full details.
+
+### MIT License Overview
+
+The Netflix Scrapper project is distributed under the MIT License, one of the most permissive and widely-adopted open-source licenses in the software development community.
+
+#### Permissions
+- ✅ Commercial use
+- ✅ Modification and derivative works
+- ✅ Distribution (original or modified)
+- ✅ Private use
+
+#### Conditions
+- Include the original license text and copyright notice in any distributed copies or derivative works
+- Provide clear attribution to original authors and contributors
+
+#### Limitations
+- ❌ No warranty; software provided "as-is"
+- ❌ No liability for damages, losses, or issues arising from use
+- ❌ Users bear full responsibility for legal compliance
+
+### Important Legal Disclaimer
+
+**While the code is licensed under the MIT License, please note:**
+
+- This project does **not** use the official Netflix API
+- Users are **solely responsible** for ensuring compliance with:
+  - Local and national laws in their jurisdiction
+  - Platform Terms of Service
+  - Copyright and intellectual property regulations
+- The tool targets third-party streaming mirror sites
+- **Usage may violate applicable legislation or platform agreements** depending on your jurisdiction
+- The MIT License does **not** exempt users from legal obligations regarding content distribution
+
+### Recommendations
+
+Organizations and individuals utilizing this codebase should:
+
+1. Retain copies of the MIT License with any distributions
+2. Review and ensure compliance with local intellectual property and content protection laws
+3. Understand that the license does not absolve users of responsibility for legal compliance with content distribution platforms and applicable regulations
+4. Maintain proper documentation of any modifications or derivative works
+
+---
+
+**For the complete MIT License text, refer to the LICENSE file in this repository.**
