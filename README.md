@@ -223,7 +223,4 @@ Potential improvements:
 - Add graceful signal handling for Ctrl+C with state flush.
 
 ## License
-
-No license file is currently present in this repository.
-
-If you plan to publish this project, add an explicit license (for example, MIT/Apache-2.0) and ensure your use case is legally compliant.
+# MIT LICENSE
