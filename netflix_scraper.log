@@ -37,3 +37,7 @@ Call log:
 Exception: Failed to authenticate or bypass verification
 
 2025-11-13 15:59:11,039 - netflix_scraper - ERROR - ❌ An unexpected error occurred during navigation or authentication: Page.wait_for_selector: Target page, context or browser has been closed
+2026-02-16 11:41:48,501 - netflix_scraper - ERROR - ❌ Timeout while navigating to home or waiting for searchTab. Authentication failed.
+2026-02-16 11:44:12,995 - netflix_scraper - ERROR - ❌ Could not bypass verification.
+2026-02-16 11:45:30,003 - netflix_scraper - ERROR - ❌ Timeout while navigating to home or waiting for searchTab. Authentication failed.
+2026-02-16 11:50:51,966 - netflix_scraper - ERROR - ❌ Error while closing browser: Browser.close: Connection closed while reading from the driver

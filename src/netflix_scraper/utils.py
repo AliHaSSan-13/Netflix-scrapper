@@ -1,22 +1,22 @@
 import re
 from .logger import logger
 
-def categorize_m3u8_urls(urls):
+def categorize_m3u8_urls(urls, audio_path_fragment="/a/", stream_extension=".m3u8", video_token="::kp"):
     """Categorize URLs into video and audio streams"""
     video_urls = []
     audio_urls = []
     
     for url in urls:
-        if '/a/' in url and url.endswith('.m3u8'):
+        if audio_path_fragment in url and url.endswith(stream_extension):
             audio_urls.append(url)
-        elif '::kp' in url and '/a/' not in url:
+        elif video_token in url and audio_path_fragment not in url:
             video_urls.append(url)
     
     logger.info(f"📹 Video URLs: {len(video_urls)}")
     logger.info(f"🔊 Audio URLs: {len(audio_urls)}")
     return video_urls, audio_urls
 
-def find_working_urls(video_urls, audio_urls):
+def find_working_urls(video_urls, audio_urls, preferred_video_domain="net51.cc"):
     """Find working video and audio URLs"""
     logger.info(f"\n🔍 Found {len(video_urls)} video URL(s) and {len(audio_urls)} audio URL(s)")
     
@@ -26,7 +26,7 @@ def find_working_urls(video_urls, audio_urls):
     
     # Look for master url
     for url in video_urls:
-        if 'net51.cc' in url:
+        if preferred_video_domain in url:
             working_video = url
             logger.info(f"🎯 Selected master video URL: {working_video}")
             break

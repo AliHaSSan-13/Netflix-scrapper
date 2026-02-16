@@ -3,20 +3,21 @@ from .logger import logger
 import re
 from tqdm import tqdm
 
-HEADERS = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Accept-Encoding": "gzip, deflate, br",
-    "Referer": "https://net20.cc/"
-}
-
 class BrowserM3U8Downloader:
-    def __init__(self, context, max_workers=16, timeout=10, retries=3):
+    def __init__(self, context, config=None):
         self.context = context
-        self.max_workers = max_workers
-        self.timeout = timeout
-        self.retries = retries
+        cfg = (config or {}).get("downloader", {})
+        binaries = (config or {}).get("binaries", {})
+        self.retries = cfg.get("retries", 3)
+        self.retry_delay_seconds = cfg.get("retry_delay_seconds", 5)
+        self.concurrent_fragments = str(cfg.get("concurrent_fragments", 4))
+        self.user_agent = cfg.get(
+            "user_agent",
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        )
+        self.referer = cfg.get("referer", "https://net51.cc/")
+        self.base_flags = cfg.get("base_flags", ["--no-part", "--no-warnings", "--newline"])
+        self.yt_dlp_binary = binaries.get("yt_dlp", "yt-dlp")
         
     async def download_m3u8_with_ytdlp(self, m3u8_url, output_name="output.mp4"):
         if not m3u8_url:
@@ -25,13 +26,11 @@ class BrowserM3U8Downloader:
         logger.info(f"🎯 Downloading: {m3u8_url}")
 
         ytdlp_cmd = [
-            "yt-dlp",
-            "--no-part",
-            "--no-warnings",
-            "--newline",
-            "--concurrent-fragments", "4",
-            "--user-agent", HEADERS["User-Agent"],
-            "--referer", "https://net51.cc/",
+            self.yt_dlp_binary,
+            *self.base_flags,
+            "--concurrent-fragments", self.concurrent_fragments,
+            "--user-agent", self.user_agent,
+            "--referer", self.referer,
             "-o", output_name,
             m3u8_url,
         ]
@@ -101,7 +100,7 @@ class BrowserM3U8Downloader:
                 if pbar:
                     pbar.close()
             
-            await asyncio.sleep(5) # Wait 5 seconds before retrying
+            await asyncio.sleep(self.retry_delay_seconds)
 
         logger.error(f"❌ Failed to download after {self.retries} attempts: {m3u8_url}")
         return False

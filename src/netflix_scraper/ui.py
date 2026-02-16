@@ -2,6 +2,13 @@ import os
 from .logger import logger
 
 class UIManager:
+    def __init__(self, page, config=None):
+        self.page = page
+        self.config = config or {}
+        self.selectors = self.config.get("selectors", {})
+        self.timeouts = self.config.get("timeouts", {})
+        self.ui_cfg = self.config.get("ui", {})
+
     def get_download_path(self):
         """Get and validate the download path from the user."""
         while True:
@@ -11,26 +18,32 @@ class UIManager:
             else:
                 logger.warning("Invalid path! Please enter a valid directory path.")
 
-    def __init__(self, page):
-        self.page = page
-
     async def get_search_results(self):
         """Get and display search results"""
         logger.info("📋 Fetching search results...")
         try:
-            await self.page.wait_for_selector('div.search-post', timeout=15000)
+            await self.page.wait_for_selector(
+                self.selectors.get("search_results", "div.search-post"),
+                timeout=self.timeouts.get("search_results_wait_ms", 15000),
+            )
             
-            results = await self.page.query_selector_all('div.search-post')
+            results = await self.page.query_selector_all(
+                self.selectors.get("search_results", "div.search-post")
+            )
             
             titles = []
             for i, result in enumerate(results):
                 try:
-                    title_element = await result.query_selector('p.fallback-text')
+                    title_element = await result.query_selector(
+                        self.selectors.get("search_result_title", "p.fallback-text")
+                    )
                     if title_element:
                         title = await title_element.text_content()
                         titles.append(title.strip())
                     else:
-                        link_element = await result.query_selector('a[aria-label]')
+                        link_element = await result.query_selector(
+                            self.selectors.get("search_result_aria_link", "a[aria-label]")
+                        )
                         if link_element:
                             title = await link_element.get_attribute('aria-label')
                             titles.append(title.strip())
@@ -86,8 +99,15 @@ class UIManager:
         """Get available languages and prompt user for selection."""
         logger.info("\n🌐 Fetching available languages...")
         try:
-            await self.page.wait_for_selector('div.audio_lang_list a', timeout=10000)
-            language_elements = await self.page.query_selector_all('div.audio_lang_list a')
+            default_language = self.ui_cfg.get("default_language", "English")
+            preferred_language_keys = self.ui_cfg.get("preferred_languages", ["english", "hindi"])
+            await self.page.wait_for_selector(
+                self.selectors.get("language_option", "div.audio_lang_list a"),
+                timeout=self.timeouts.get("languages_wait_ms", 10000),
+            )
+            language_elements = await self.page.query_selector_all(
+                self.selectors.get("language_option", "div.audio_lang_list a")
+            )
             available_languages = []
 
             for element in language_elements:
@@ -98,10 +118,10 @@ class UIManager:
                         available_languages.append(clean_text)
 
             if not available_languages:
-                logger.warning("❌ No valid languages found, defaulting to English.")
-                return "English"
+                logger.warning(f"❌ No valid languages found, defaulting to {default_language}.")
+                return default_language
 
-            preferred_langs = [lang for lang in available_languages if lang.lower() in ["english", "hindi"]]
+            preferred_langs = [lang for lang in available_languages if lang.lower() in preferred_language_keys]
 
             if preferred_langs:
                 logger.info("\n🌐 Preferred languages available:")
@@ -148,4 +168,4 @@ class UIManager:
                         logger.warning("Please enter a valid number.")
         except Exception as e:
             logger.warning(f"⚠️ Could not fetch language list: {e}")
-            return "English"
+            return self.ui_cfg.get("default_language", "English")
