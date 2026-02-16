@@ -212,15 +212,5 @@ The target site’s DOM may have changed; update selectors in:
 - `src/netflix_scraper/ui.py`
 - `src/netflix_scraper/scraper.py`
 
-## Development Notes
-
-Potential improvements:
-
-- Move hard-coded domains/selectors/cookies into config.
-- Add structured settings via `.env` or YAML.
-- Add automated tests for utils, state transitions, and parser logic.
-- Improve stream quality selection and variant playlist handling.
-- Add graceful signal handling for Ctrl+C with state flush.
-
 ## License
 # MIT LICENSE
