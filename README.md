@@ -85,17 +85,10 @@ sudo apt update
 sudo apt install -y ffmpeg yt-dlp
 ```
 
-Install Python dependencies:
-
-```bash
-pip install -r requirements.txt
-python -m playwright install firefox
-```
-
 ## Setup
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/AliHaSSan-13/Netflix-scrapper
 cd Netflix-scrapper
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
