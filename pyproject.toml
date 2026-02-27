@@ -20,6 +20,22 @@ dependencies = [
     "m3u8>=4.0.0",
     "requests>=2.31.0",
 ]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Environment :: Console",
+    "Topic :: Multimedia :: Video",
+]
+keywords = ["netflix", "scraper", "downloader", "yt-dlp", "playwright"]
+
+[project.urls]
+Homepage = "https://github.com/AliHaSSan-13/Netflix-scrapper"
+Issues = "https://github.com/AliHaSSan-13/Netflix-scrapper/issues"
+Repository = "https://github.com/AliHaSSan-13/Netflix-scrapper"
 
 [project.scripts]
 netflix-scraper = "netflix_scraper.cli:main"
