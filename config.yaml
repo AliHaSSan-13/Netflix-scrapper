@@ -14,6 +14,7 @@ app:
   state_file: scraper_state.json
   cookies_file: cookies.json
   max_retries: 3
+  download_dir: "~/Downloads"
 
 binaries:
   ffmpeg: ffmpeg
@@ -41,7 +42,7 @@ stream_matching:
   preferred_video_domain: net51.cc
 
 browser:
-  headless: false
+  headless: true
   launch_args:
     - --disable-blink-features=AutomationControlled
     - --no-first-run

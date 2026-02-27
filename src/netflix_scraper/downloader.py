@@ -1,7 +1,8 @@
 import asyncio
-from .logger import logger
+import os
 import re
 from tqdm import tqdm
+from .logger import logger
 from .exceptions import DownloadError
 
 class BrowserM3U8Downloader:
@@ -46,56 +47,32 @@ class BrowserM3U8Downloader:
                     stderr=asyncio.subprocess.STDOUT,
                 )
 
-                pbar_desc = f"⬇️ Downloading"
                 stdout_lines = []
-
                 async for raw_line in process.stdout:
                     line = raw_line.decode(errors="ignore").strip()
                     stdout_lines.append(line)
                     
-                    patterns = [
-                        r"\[download\]\s+(\d+\.\d+)%.*?of\s+([\d\.]+)(\w+iB).*?at\s+([\d\.]+\w+/s)",
-                        r"\[download\]\s+(\d+\.\d+)%.*?of\s+~?([\d\.]+)(\w+iB).*?at\s+([\d\.]+\w+/s)",
-                        r"\[download\]\s+(\d+\.\d+)%",
-                        r"\[download\]\s+.*?(\d+\.\d+)%.*?of\s+([\d\.]+)(\w+iB)",
-                    ]
-                    
-                    for pattern in patterns:
-                        match = re.search(pattern, line)
-                        if match:
-                            percent = float(match.group(1))
-                            
-                            if pbar is None:
-                                total_size, total_unit = "Unknown", ""
-                                if len(match.groups()) >= 3:
-                                    total_size, total_unit = match.group(2), match.group(3)
-                                    pbar_desc = f"⬇️ Downloading {output_name} ({total_size}{total_unit})"
-                                
-                                pbar = tqdm(
-                                    total=100,
-                                    desc=pbar_desc,
-                                    bar_format="{l_bar}{bar} | {n:.1f}/{total}%",
-                                    unit="%",
-                                    dynamic_ncols=True
-                                )
-                            
-                            pbar.n = percent
-                            pbar.refresh()
-                            break
+                    percent, speed = self._parse_progress(line)
+                    if percent is not None:
+                        if pbar is None:
+                            pbar = self._create_pbar(output_name, line)
+                        pbar.n = percent
+                        if speed:
+                            pbar.set_postfix_str(speed, refresh=False)
+                        pbar.refresh()
 
                 await process.wait()
-                
                 if pbar:
-                    pbar.n = 100
-                    pbar.refresh()
                     pbar.close()
 
                 if process.returncode == 0:
                     logger.info(f"✅ Download complete: {output_name}")
                     return True
-                else:
-                    logger.warning(f"❌ yt-dlp failed on attempt {attempt + 1}/{self.retries} with return code: {process.returncode}")
-                    logger.debug("".join(stdout_lines))
+                
+                logger.warning(f"❌ yt-dlp failed (attempt {attempt+1}/{self.retries}) Code: {process.returncode}")
+                # Log last few lines of stdout if it failed
+                for line in stdout_lines[-5:]:
+                    logger.debug(f"yt-dlp: {line}")
 
             except (asyncio.CancelledError, KeyboardInterrupt):
                 if process:
@@ -103,7 +80,7 @@ class BrowserM3U8Downloader:
                         logger.info(f"⚠️ Terminating yt-dlp process for {output_name}...")
                         process.terminate()
                         await process.wait()
-                    except:
+                    except Exception:
                         pass
                 if pbar:
                     pbar.close()
@@ -120,3 +97,34 @@ class BrowserM3U8Downloader:
             raise DownloadError(f"yt-dlp failed after {self.retries} attempts for: {m3u8_url}")
         
         return False
+    def _parse_progress(self, line):
+        percent = None
+        speed = ""
+        
+        if m := re.search(r"\[download\]\s+(\d+\.\d+)%", line):
+            percent = float(m.group(1))
+            
+        if m := re.search(r"at\s+([\d\.]+(?:[kKMmGg]iB|B)/s)", line):
+            speed = m.group(1)
+            
+        return percent, speed
+
+    def _create_pbar(self, path, first_line):
+        name = os.path.basename(path)
+        if len(name) > 30:
+            name = name[:27] + "..."
+            
+        desc = f"⬇️ {name}"
+        if m := re.search(r"of\s+~?([\d\.]+)(\w+iB)", first_line):
+            desc += f" ({m.group(1)}{m.group(2)})"
+            
+        pbar = tqdm(
+            total=100,
+            desc=desc,
+            bar_format="{l_bar}{bar} | {n:.1f}% | {postfix}",
+            unit="%",
+            dynamic_ncols=True,
+            leave=True
+        )
+        pbar.set_postfix_str("calc...")
+        return pbar

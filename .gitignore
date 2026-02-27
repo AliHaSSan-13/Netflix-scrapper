@@ -1,4 +1,21 @@
 __pycache__/
 .venv/
 *.log
-.agent
+.agent/
+*.pyc
+.DS_Store
+
+# State and session data
+scraper_state.json
+cookies.json
+
+# Local config
+# config.yaml (keep template, ignore actual if moving to home)
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
