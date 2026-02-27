@@ -1,255 +1,120 @@
-# Netflix Scrapper
+# Netflix Scraper
 
-A Python automation tool that browses a streaming mirror site, captures `.m3u8` playlist URLs from network traffic, downloads media streams with `yt-dlp`, and merges video/audio into `.mp4` files using `ffmpeg`.
+A powerful CLI tool to automate browser interactions, intercept stream URLs, and download media from streaming mirror sites using `yt-dlp` and `ffmpeg`.
 
 ## Important Notice
 
 - This project does **not** use the official Netflix API.
-- The current implementation targets `https://net22.cc` (and stream URLs such as `net51.cc`) through browser automation.
-- You are responsible for complying with local laws, platform Terms of Service, and copyright rules.
+- The current implementation targets streaming mirror sites (e.g., `net22.cc`, `net51.cc`) via browser automation.
+- **Disclaimer**: You are solely responsible for complying with local laws, platform Terms of Service, and copyright rules. Usage may violate applicable legislation depending on your jurisdiction.
+
+## Quick Start
+
+### 1. Install System Dependencies
+
+You absolutely need `ffmpeg` installed on your system to merge the video and audio streams seamlessly.
+- **Ubuntu/Debian**: `sudo apt install ffmpeg`
+- **macOS (Homebrew)**: `brew install ffmpeg`
+- **Windows**: [Download FFmpeg](https://ffmpeg.org/download.html) and add it to your system PATH.
+
+### 2. Install the Package
+
+We recommend installing the package into an isolated virtual environment:
+
+```bash
+# Clone the repository
+git clone https://github.com/AliHaSSan-13/Netflix-scrapper
+cd Netflix-scrapper
+
+# Create a virtual environment and activate it
+python -m venv .venv
+source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+
+# Install the CLI tool
+pip install .
+```
+
+### 3. Run the Tool
+
+Once installed, you can launch the app directly from your terminal:
+
+```bash
+netflix-scraper
+```
+
+> **Zero-Touch Onboarding**: On your very first run, the tool will automatically detect if `yt-dlp` or browser binaries are missing and offer to install them for you. No manual downloading required!
+
+## Prerequisites: Authentication Cookies
+
+Before scraping, you must provide a valid authenticated session for the target site to bypass login forms.
+
+1. Open your browser and navigate to the mirror site (e.g., `https://net22.cc/home`).
+2. Create an account or sign in.
+3. Use a browser extension (like "Export Cookies") to export your active session cookies as JSON.
+4. The CLI will automatically create a configuration directory at `~/.netflix-scraper/`. Save your exported JSON file there as `~/.netflix-scraper/cookies.json`.
+
+*(If the configuration directory does not exist yet, you can run the tool once and let it fail, which will auto-generate the folder, or just create it manually).*
 
 ## Features
 
-- Interactive CLI workflow for title/season/episode selection.
-- Browser automation via Playwright (Firefox, non-headless).
-- Human-like behavior simulation (random delays, mouse movement, scrolling) to reduce bot detection.
-- Automatic interception and filtering of `.m3u8` stream URLs.
-- Stream download with retry logic using `yt-dlp`.
-- Optional video/audio merge via `ffmpeg` with faststart flag.
-- Resume support through persisted state (`scraper_state.json`) after interruptions/failures.
-- Cookie persistence to reduce repeated verification/login friction.
-- Progress feedback in terminal with `tqdm`.
+- **Interactive CLI**: Simple question-and-answer workflow to select titles, languages, seasons, and episodes.
+- **Zero-Touch Onboarding**: Automatic detection and installation of Chromium (default engine) and `yt-dlp`.
+- **Flexible Browser Support**: Seamlessly switch between Chromium, Firefox, or WebKit.
+- **Rich User Experience**: Custom ASCII art banner and enhanced progress bars (`tqdm`) with real-time speed tracking.
+- **Cross-Platform Sandboxing**: Settings and session states are safely tucked away in your home directory (`~/.netflix-scraper/`).
+- **Human-like Behavior**: Emulates real user interactions (mouse movements, scrolling, organic delays) to reduce bot detection.
+- **Smart Resume**: State persistency allows you to resume broken or interrupted downloads without starting over.
 
-## Tech Stack
+## CLI Usage & Flags
 
-- Python (3.10+ recommended; tested layout suggests 3.12)
-- [Playwright](https://playwright.dev/python/)
-- [yt-dlp](https://github.com/yt-dlp/yt-dlp)
-- [ffmpeg](https://ffmpeg.org/)
-- `tqdm`, `requests`, `m3u8`
-
-## Repository Structure
-
-```text
-.
-├── main.py
-├── requirements.txt
-├── cookies.json
-├── browser_headers.json
-├── netflix_scraper.log
-└── src/netflix_scraper/
-    ├── __init__.py
-    ├── browser.py          # Browser/context lifecycle, cookies, verification handling
-    ├── downloader.py       # yt-dlp async runner + progress parsing
-    ├── human_behavior.py   # Randomized delay and mouse movement helpers
-    ├── logger.py           # Console + file logging setup
-    ├── scraper.py          # End-to-end orchestration + retry + resume state
-    ├── ui.py               # Interactive prompts and selection logic
-    └── utils.py            # URL categorization and filename sanitization
-```
-
-## How It Works
-
-1. `main.py` asks for a destination directory.
-2. `NetflixScraper.execute_with_retry()` loads persisted state and runs orchestration.
-3. Browser starts via `BrowserManager.setup()` and applies cookies.
-4. Scraper navigates to `https://net22.cc/home`, handles verification if needed.
-5. User searches and selects title/language/season/episodes.
-6. Network interception collects candidate `.m3u8` URLs.
-7. URLs are categorized into video/audio streams.
-8. Streams are downloaded to temporary files with `yt-dlp`.
-9. If audio exists and downloads successfully, `ffmpeg` merges streams; otherwise video-only output is finalized.
-10. State is updated continuously and cleaned up when run completes.
-
-## Prerequisites
-
-Before running this project, you must have a valid authenticated session on the target site:
-
-1. Open `https://net22.cc/home` (or search `netmirror` in your browser and open the mirror site).
-2. Create/sign in to your account.
-3. Use a browser cookie export extension (for example, `Export Cookies`) to export your current session cookies.
-4. Paste the exported cookie JSON into `cookies.json` in this repository.
-
-Without valid session cookies in `cookies.json`, authentication and scraping will usually fail.
-
-Install system tools first:
-
-- `ffmpeg`
-- `yt-dlp`
-
-Examples:
+You can bypass some of the interactive prompts by passing arguments directly:
 
 ```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install -y ffmpeg yt-dlp
+# Search directly for a movie and start downloading with Firefox engine
+netflix-scraper --query "Breaking Bad" --browser firefox
 ```
 
-## Setup
-
-```bash
-git clone https://github.com/AliHaSSan-13/Netflix-scrapper
-cd Netflix-scrapper
-python -m venv .venv
-source .venv/bin/activate  # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
-python -m playwright install firefox
-```
-
-## Usage
-
-Run:
-
-```bash
-python main.py
-```
+| Flag | Shortcut | Description |
+| --- | --- | --- |
+| `--query` | `-q` | Initial search string (e.g., movie or series title). |
+| `--browser` | `-b` | Select execution engine (`chromium`, `firefox`, `webkit`). Default is `chromium`. |
+| `--headless` | | Run the browser invisibly in the background. |
+| `--no-headless` | | Force the browser window to be visible during execution. |
+| `--output` | `-o` | Setup a default destination directory for downloads. |
+| `--config` | `-c` | Override default settings with a custom `config.yaml` path. |
 
 ## Configuration
 
-Runtime settings are centralized in `config.yaml` (project root), including:
+Runtime settings are fully customizable. The tool looks for configuration in:
+1. Custom `--config` flag path.
+2. User directory: `~/.netflix-scraper/config.yaml`.
+3. It initializes with sensible fallbacks if none are found.
 
-- target site URL and verification keyword
-- selectors and wait timeouts
-- stream capture/matching rules
-- downloader/ffmpeg binary names and retry behavior
-- state/cookie file paths
+You can customize variables like target site URLs, default download paths, request wait timeouts, simulated human delays, ffmpeg strictness, etc.
 
-If `config.yaml` is missing, the app falls back to built-in defaults from `src/netflix_scraper/config.py`.
-
-You will be prompted for:
-
-- Download directory path
-- Search query (movie/series)
-- Title selection
-- Audio language
-- Season (if applicable)
-- Episode numbers (comma-separated) or Enter for all
-
-## Output Behavior
-
-- Base output folder: `<download_path>/<sanitized_title>/`
-- For series with seasons: `<download_path>/<title>/<season>/`
-- Final media: `<episode_or_title>.mp4`
-- Temporary artifacts during download:
-  - `*.video.mp4`
-  - `*.audio.m4a`
-
-## State and Resume
-
-The scraper persists run state in `scraper_state.json` (created at project root).
-
-Tracked state includes:
-
-- search query
-- selected title/language/season/episodes
-- per-item download status (`downloading`, `completed`, `failed`)
-- completion flag for full run
-
-On next run, previous choices can be reused and completed items are skipped.
-
-## Cookies
-
-- `cookies.json` is loaded if present and updated after successful navigation/authentication.
-- If cookie loading fails or no cookies exist, a static fallback list in `browser.py` is used.
-- Keep `cookies.json` private. It may contain session-related identifiers.
-
-## Logging
-
-Configured in `src/netflix_scraper/logger.py`:
-
-- Console: INFO-level plain messages
-- File: ERROR-level structured logs (`netflix_scraper.log`)
-
-## Retry and Failure Handling
-
-- Top-level run retry limit: `max_retries = 3` in `NetflixScraper`.
-- On unhandled exceptions, the tool prompts whether to retry.
-- Temporary files are tracked and cleaned after terminal failure paths.
-- If `ffmpeg` is missing, run exits early with an error message.
-
-## Known Limitations
-
-- Site selectors are tightly coupled to current target-site DOM and may break after UI changes.
-- Verification/captcha bypass is heuristic and not guaranteed.
-- URL selection logic is simplistic (first matching candidates).
-- `m3u8` and `requests` are listed dependencies but are not actively used in the current runtime flow.
-- Browser runs in headed mode (`headless=False`) by default.
-
-## Security Recommendations
-
-- Add runtime artifacts to `.gitignore`:
-  - `cookies.json`
-  - `scraper_state.json`
-  - `netflix_scraper.log`
-  - `__pycache__/`
-- Rotate/remove cookies if shared accidentally.
-- Avoid storing personal account/session data in the repository.
+### Output Behavior
+- Base Output: `<download_path>/<sanitized_title>/`
+- Formatted File: `<download_path>/<title>/<season>/<episode_or_title>.mp4`
 
 ## Troubleshooting
 
-### `ffmpeg is not installed`
-Install `ffmpeg` and ensure it is available in `PATH`.
+- **`ffmpeg` is not recognized**: Ensure `ffmpeg` is actually installed and added to your OS `PATH` variable.
+- **Downloads randomly failing**: Verify that `yt-dlp` is up-to-date. Streaming sites frequently change their backend APIs.
+- **Browser fails to launch**: Run `python -m playwright install` or let the CLI's auto-installer take over. You might also be missing system dependencies for Linux browsers; install them with `npx playwright install-deps`.
+- **Stuck at verification loop**: The target site's Captcha might have flagged the bot. Restart the app using the `--no-headless` flag so you can manually solve it if needed.
 
-### `yt-dlp` download failures
-- Verify stream URL validity.
-- Update `yt-dlp` to latest.
-- Check network/firewall/VPN behavior.
-
-### Playwright errors / browser not launching
-- Reinstall Playwright browser: `python -m playwright install firefox`
-- Ensure required system libraries for Firefox are installed.
-
-### No titles/episodes/languages detected
-The target site’s DOM may have changed; update selectors in:
-
-- `src/netflix_scraper/ui.py`
-- `src/netflix_scraper/scraper.py`
+## Architecture Highlights
+- Uses **Playwright** to orchestrate browser routing and DOM mutations.
+- Network traffic interceptors sniff for `.m3u8` payloads and dynamically extract media streaming tokens.
+- **yt-dlp** orchestrates fragmented downloading.
+- **ffmpeg** is sub-processed to weave and merge audio fragments with video fragments safely via the `movflags_faststart` option.
 
 ## License
 
-This project is licensed under the **MIT License** – see below for full details.
+This project is licensed under the **MIT License**.
 
-### MIT License Overview
+- **Commercial & Private Use**: Allowed.
+- **Modification & Distribution**: Allowed.
+- **Warranty/Liability**: None. The software is provided "as-is".
 
-The Netflix Scrapper project is distributed under the MIT License, one of the most permissive and widely-adopted open-source licenses in the software development community.
-
-#### Permissions
-- ✅ Commercial use
-- ✅ Modification and derivative works
-- ✅ Distribution (original or modified)
-- ✅ Private use
-
-#### Conditions
-- Include the original license text and copyright notice in any distributed copies or derivative works
-- Provide clear attribution to original authors and contributors
-
-#### Limitations
-- ❌ No warranty; software provided "as-is"
-- ❌ No liability for damages, losses, or issues arising from use
-- ❌ Users bear full responsibility for legal compliance
-
-### Important Legal Disclaimer
-
-**While the code is licensed under the MIT License, please note:**
-
-- This project does **not** use the official Netflix API
-- Users are **solely responsible** for ensuring compliance with:
-  - Local and national laws in their jurisdiction
-  - Platform Terms of Service
-  - Copyright and intellectual property regulations
-- The tool targets third-party streaming mirror sites
-- **Usage may violate applicable legislation or platform agreements** depending on your jurisdiction
-- The MIT License does **not** exempt users from legal obligations regarding content distribution
-
-### Recommendations
-
-Organizations and individuals utilizing this codebase should:
-
-1. Retain copies of the MIT License with any distributions
-2. Review and ensure compliance with local intellectual property and content protection laws
-3. Understand that the license does not absolve users of responsibility for legal compliance with content distribution platforms and applicable regulations
-4. Maintain proper documentation of any modifications or derivative works
-
----
-
-**For the complete MIT License text, refer to the LICENSE file in this repository.**
+*For the complete legal text, refer to the `LICENSE` file in this repository.*
