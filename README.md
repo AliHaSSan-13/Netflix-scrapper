@@ -17,7 +17,7 @@ A powerful CLI tool to automate browser interactions, intercept stream URLs, and
 
 You must have **ffmpeg** and **Google Chrome** installed on your system.
 - **FFmpeg**: Required to merge video and audio streams seamlessly.
-- **Google Chrome**: Required for the browser automation engine.(Any other browser can be used too but you have to pass its flags as an argument)[see CLI flags](#cli-usage--flags)
+- **Google Chrome**: Required for the browser automation engine.(Any other browser can be used too but you have to pass its flags as an argument) - [see CLI flags](#cli-usage--flags)
 
 #### Installation help for FFmpeg:
 - **Ubuntu/Debian**: `sudo apt install ffmpeg`
