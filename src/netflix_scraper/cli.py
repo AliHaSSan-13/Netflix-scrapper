@@ -19,7 +19,7 @@ async def run_scraper(query=None, headless=None, download_path=None, config_path
     if not ensure_binaries(browser_type):
         sys.exit(1)
 
-    # Load config automatically (picks ~/.netflix-scraper/ or local)
+    # Load config automatically (picks ~/.netflix-scrapper/ or local)
     config = load_config(config_path)
     
     # Apply overrides from CLI

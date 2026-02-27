@@ -143,8 +143,8 @@ def _deep_merge(base, override):
 
 
 def get_config_dir():
-    """Get or create the .netflix-scraper directory in the user's home folder."""
-    config_dir = Path.home() / ".netflix-scraper"
+    """Get or create the .netflix-scrapper directory in the user's home folder."""
+    config_dir = Path.home() / ".netflix-scrapper"
     config_dir.mkdir(parents=True, exist_ok=True)
     
     # Simple migration: Copy local config/cookies if they exist and aren't in home yet
@@ -172,7 +172,7 @@ def load_config(config_path=None):
     if config_path:
         config_file = Path(config_path)
     else:
-        # Priority: ~/.netflix-scraper/config.yaml -> ./config.yaml
+        # Priority: ~/.netflix-scrapper/config.yaml -> ./config.yaml
         home_config = get_config_dir() / "config.yaml"
         local_config = Path("config.yaml")
         config_file = home_config if home_config.exists() else local_config

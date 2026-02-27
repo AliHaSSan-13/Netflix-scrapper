@@ -38,7 +38,7 @@ Issues = "https://github.com/AliHaSSan-13/Netflix-scrapper/issues"
 Repository = "https://github.com/AliHaSSan-13/Netflix-scrapper"
 
 [project.scripts]
-netflix-scraper = "netflix_scraper.cli:main"
+netflix-scrapper = "netflix_scraper.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
