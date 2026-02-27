@@ -9,10 +9,16 @@ class UIManager:
         self.timeouts = self.config.get("timeouts", {})
         self.ui_cfg = self.config.get("ui", {})
 
-    def get_download_path(self):
+    def get_download_path(self, default_path):
         """Get and validate the download path from the user."""
+        default_expanded = os.path.expanduser(default_path)
         while True:
-            download_path = input("Enter the path to store the videos: ").strip()
+            download_path = input(f"Enter the path to store the videos [{default_expanded}]: ").strip()
+            if not download_path:
+                download_path = default_expanded
+                
+            download_path = os.path.expanduser(download_path)
+            
             if os.path.isdir(download_path):
                 return download_path
             else:
@@ -96,76 +102,38 @@ class UIManager:
         return selected_episodes
 
     async def get_language_selection(self):
-        """Get available languages and prompt user for selection."""
-        logger.info("\n🌐 Fetching available languages...")
+        """Get and prompt user for language selection."""
+        logger.info("\n🌐 Fetching languages...")
         try:
-            default_language = self.ui_cfg.get("default_language", "English")
-            preferred_language_keys = self.ui_cfg.get("preferred_languages", ["english", "hindi"])
-            await self.page.wait_for_selector(
-                self.selectors.get("language_option", "div.audio_lang_list a"),
-                timeout=self.timeouts.get("languages_wait_ms", 10000),
-            )
-            language_elements = await self.page.query_selector_all(
-                self.selectors.get("language_option", "div.audio_lang_list a")
-            )
-            available_languages = []
+            default_lang = self.ui_cfg.get("default_language", "English")
+            await self.page.wait_for_selector(self.selectors.get("language_option", "div.audio_lang_list a"), 
+                                            timeout=self.timeouts.get("languages_wait_ms", 10000))
+            language_elements = await self.page.query_selector_all(self.selectors.get("language_option", "div.audio_lang_list a"))
+            available = [text.strip() for element in language_elements if (text := await element.text_content()) and text.strip().lower() != "unknown"]
 
-            for element in language_elements:
-                text = await element.text_content()
-                if text:
-                    clean_text = text.strip()
-                    if clean_text.lower() != "unknown":
-                        available_languages.append(clean_text)
+            if not available:
+                return default_lang
 
-            if not available_languages:
-                logger.warning(f"❌ No valid languages found, defaulting to {default_language}.")
-                return default_language
+            pref_keys = self.ui_cfg.get("preferred_languages", ["english", "hindi"])
+            preferred = [lang for lang in available if lang.lower() in pref_keys]
 
-            preferred_langs = [lang for lang in available_languages if lang.lower() in preferred_language_keys]
+            if preferred:
+                logger.info("\n🌐 Preferred languages:")
+                for i, lang in enumerate(preferred, 1):
+                    logger.info(f"{i}. {lang}")
+                logger.info("A. Show all")
 
-            if preferred_langs:
-                logger.info("\n🌐 Preferred languages available:")
-                for i, pl in enumerate(preferred_langs, 1):
-                    logger.info(f"{i}. {pl}")
-                logger.info("A. Show all languages")
-
-                while True:
-                    user_input = input("\nSelect a language (1/2) or type 'A' to see all: ").strip().lower()
-                    if user_input == 'a':
-                        logger.info("\n🌐 All available languages:")
-                        for i, lang_option in enumerate(available_languages, 1):
-                            logger.info(f"{i}. {lang_option}")
-                        while True:
-                            try:
-                                choice = int(input(f"\nSelect language (1-{len(available_languages)}): "))
-                                if 1 <= choice <= len(available_languages):
-                                    return available_languages[choice - 1]
-                                else:
-                                    logger.warning("Invalid selection.")
-                            except ValueError:
-                                logger.warning("Please enter a valid number.")
-                    else:
-                        try:
-                            choice = int(user_input)
-                            if 1 <= choice <= len(preferred_langs):
-                                return preferred_langs[choice - 1]
-                            else:
-                                logger.warning("Invalid selection.")
-                        except ValueError:
-                            logger.warning("Please enter a valid input.")
-            else:
-                logger.info("\n🌐 Available languages:")
-                for i, lang_option in enumerate(available_languages, 1):
-                    logger.info(f"{i}. {lang_option}")
-                while True:
+                choice = input("\nSelect (1/2/A): ").strip().lower()
+                if choice != 'a':
                     try:
-                        choice = int(input(f"\nSelect language (1-{len(available_languages)}): "))
-                        if 1 <= choice <= len(available_languages):
-                            return available_languages[choice - 1]
-                        else:
-                            logger.warning("Invalid selection.")
-                    except ValueError:
-                        logger.warning("Please enter a valid number.")
+                        return preferred[int(choice)-1]
+                    except (ValueError, IndexError):
+                        pass
+            
+            logger.info("\n🌐 All languages:")
+            for i, lang in enumerate(available, 1):
+                logger.info(f"{i}. {lang}")
+            return available[self.get_user_selection(available, "language")]
         except Exception as e:
             logger.warning(f"⚠️ Could not fetch language list: {e}")
-            return self.ui_cfg.get("default_language", "English")
+            return default_lang

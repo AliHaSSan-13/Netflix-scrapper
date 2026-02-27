@@ -20,14 +20,18 @@ class BrowserManager:
         self.app_cfg = self.config.get("app", {})
         self.site_cfg = self.config.get("site", {})
 
-    async def setup(self):
+    async def setup(self, browser_type="chromium"):
         """Initialize browser and page with human-like behavior"""
-        logger.info("🚀 Launching browser...")
+        if browser_type == "chrome":
+            browser_type = "chromium"
+
+        logger.info(f"🚀 Launching {browser_type}...")
         try:
             self.playwright = await async_playwright().start()
             
-            self.browser = await self.playwright.firefox.launch(
-                headless=self.browser_cfg.get("headless", False),
+            launcher = getattr(self.playwright, browser_type)
+            self.browser = await launcher.launch(
+                headless=self.browser_cfg.get("headless", True),
                 args=self.browser_cfg.get(
                     "launch_args",
                     [
@@ -62,6 +66,16 @@ class BrowserManager:
             logger.info("✅ Browser launched successfully.")
             return self.page, self.context
         except Exception as e:
+            err_msg = str(e).lower()
+            if "executable doesn't exist" in err_msg or "not installed" in err_msg:
+                from .installer import install_playwright_browser
+                logger.warning(f"⚠️ {browser_type} browser is missing.")
+                if install_playwright_browser(browser_type):
+                    # Clean up the failed playwright instance before retrying
+                    if self.playwright:
+                        await self.playwright.stop()
+                    return await self.setup(browser_type)
+
             logger.error(f"❌ Failed to launch browser or set up context: {e}")
             if self.browser:
                 await self.browser.close()
@@ -82,31 +96,22 @@ class BrowserManager:
             logger.error(f"❌ Error while closing browser: {e}")
 
     async def set_cookies(self):
-        """
-        Load cookies from configured cookies file.
-        Applies them to the Playwright browser context.
-        """
-        cookies_file = self.app_cfg.get("cookies_file", "cookies.json")
-        cookies = []
+        """Load cookies from configured cookies file and apply to context."""
+        path = self.app_cfg.get("cookies_file", "cookies.json")
+        if not os.path.exists(path):
+            logger.warning("⚠️ No cookies file found.")
+            return
 
-        if os.path.exists(cookies_file):
-            try:
-                with open(cookies_file, "r") as f:
-                    cookies = json.load(f)
-                logger.info(f"🍪 Loaded existing cookies from {cookies_file}")
-            except Exception as e:
-                logger.warning(f"⚠️ Failed to load {cookies_file}: {e}")
-
-        if not cookies:
-            logger.warning("⚠️ No cookies loaded. Continuing without preloaded cookies.")
-
-        if cookies:
-            try:
-                await self.context.add_cookies(cookies)
-                logger.info("✅ Cookies applied to browser context!")
-            except Exception as e:
-                logger.error(f"❌ Error applying cookies to browser context: {e}")
-                raise NetflixAuthError(f"Failed to apply cookies: {e}")
+        try:
+            with open(path, "r") as f:
+                cookies = json.load(f)
+            if not cookies:
+                return
+            await self.context.add_cookies(cookies)
+            logger.info(f"✅ Applied cookies from {path}")
+        except Exception as e:
+            logger.error(f"❌ Error applying cookies: {e}")
+            raise NetflixAuthError(f"Failed to apply cookies: {e}")
 
     async def save_fresh_cookies(self):
         """
@@ -122,101 +127,85 @@ class BrowserManager:
             logger.warning(f"⚠️ Failed to save fresh cookies: {e}")
 
     async def handle_verification_page(self):
-        """Handle the verification page with more human-like behavior"""
+        """Handle the verification page with human-like behavior."""
         vcfg = self.browser_cfg.get("verification", {})
-        logger.info("🛡️ Verification page detected... simulating human behavior...")
+        logger.info("🛡️ Verification page detected... simulating human...")
 
         try:
-            initial_min, initial_max = vcfg.get("initial_delay_ms", [2500, 5500])
-            await self.human_simulator.async_random_delay(initial_min, initial_max)
-
-            moves_min, moves_max = vcfg.get("mouse_moves_range", [2, 4])
-            sx_min, sx_max = vcfg.get("mouse_start_x_range", [100, 800])
-            sy_min, sy_max = vcfg.get("mouse_start_y_range", [100, 600])
-            ex_min, ex_max = vcfg.get("mouse_end_x_range", [300, 1000])
-            ey_min, ey_max = vcfg.get("mouse_end_y_range", [200, 700])
-            step_min, step_max = vcfg.get("mouse_step_delay_s", [0.02, 0.08])
-            pause_min, pause_max = vcfg.get("mouse_pause_delay_ms", [500, 1500])
-            for _ in range(random.randint(moves_min, moves_max)):
-                start_x, start_y = random.randint(sx_min, sx_max), random.randint(sy_min, sy_max)
-                end_x, end_y = random.randint(ex_min, ex_max), random.randint(ey_min, ey_max)
-                path = self.human_simulator.mouse_movement_pattern(start_x, start_y, end_x, end_y)
-                for (x, y) in path:
-                    await self.page.mouse.move(x, y)
-                    await asyncio.sleep(random.uniform(step_min, step_max))
-                await self.human_simulator.async_random_delay(pause_min, pause_max)
-
-            scroll_min, scroll_max = vcfg.get("scroll_iterations_range", [2, 4])
-            amount_min, amount_max = vcfg.get("scroll_amount_range", [200, 800])
-            scroll_pause_min, scroll_pause_max = vcfg.get("scroll_pause_delay_ms", [700, 1500])
-            for _ in range(random.randint(scroll_min, scroll_max)):
-                scroll_amount = random.randint(amount_min, amount_max)
-                direction = random.choice([1, -1])
-                await self.page.mouse.wheel(0, scroll_amount * direction)
-                await self.human_simulator.async_random_delay(scroll_pause_min, scroll_pause_max)
-
-            recaptcha_iframe = None
-            iframe_selectors = self.selectors.get(
-                "recaptcha_iframes",
-                ['iframe[title*="reCAPTCHA"]', 'iframe[src*="google.com/recaptcha"]'],
-            )
-
-            for iframe_selector in iframe_selectors:
-                frame_el = await self.page.query_selector(iframe_selector)
-                if frame_el:
-                    recaptcha_iframe = frame_el
-                    logger.info(f"🔍 Found reCAPTCHA iframe: {iframe_selector}")
-                    break
-
-            if recaptcha_iframe:
-                frame = await recaptcha_iframe.content_frame()
-                if not frame:
-                    logger.warning("⚠️ Could not access reCAPTCHA frame")
-                    return False
-
-                recaptcha_wait_min, recaptcha_wait_max = vcfg.get("recaptcha_before_click_delay_ms", [2500, 4500])
-                await self.human_simulator.async_random_delay(recaptcha_wait_min, recaptcha_wait_max)
-
-                checkbox_selectors = self.selectors.get(
-                    "recaptcha_checkboxes",
-                    ['.recaptcha-checkbox-border', '.recaptcha-checkbox', 'div[role="checkbox"]'],
-                )
-                for selector in checkbox_selectors:
-                    checkbox = await frame.query_selector(selector)
-                    if checkbox:
-                        box = await checkbox.bounding_box()
-                        if box:
-                            csteps_min, csteps_max = vcfg.get("checkbox_mouse_steps_range", [10, 20])
-                            cpause_min, cpause_max = vcfg.get("checkbox_pause_delay_ms", [500, 1200])
-                            await self.page.mouse.move(
-                                box['x'] + box['width'] / 2,
-                                box['y'] + box['height'] / 2,
-                                steps=random.randint(csteps_min, csteps_max),
-                            )
-                            await self.human_simulator.async_random_delay(cpause_min, cpause_max)
-                            await checkbox.click()
-                            logger.info("✅ Clicked reCAPTCHA checkbox (human-style)")
-                            break
+            await self.human_simulator.async_random_delay(*vcfg.get("initial_delay_ms", [2500, 5500]))
+            await self._simulate_mouse_movements(vcfg)
+            await self._simulate_scrolling(vcfg)
+            
+            if await self._solve_recaptcha(vcfg):
+                logger.info("✅ reCAPTCHA checkbox clicked.")
 
             logger.info("⏳ Waiting for verification result...")
-            poll_attempts = vcfg.get("result_poll_attempts", 12)
-            poll_min, poll_max = vcfg.get("result_poll_delay_ms", [2000, 3500])
-            poll_scroll_min, poll_scroll_max = vcfg.get("result_poll_scroll_range", [100, 400])
-            verify_keyword = self.site_cfg.get("verify_keyword", "verify")
-            for _ in range(poll_attempts):
-                current_url = self.page.url
-                if verify_keyword not in current_url:
-                    logger.info("✅ Verification passed — human behavior succeeded!")
-                    return True
-                await self.human_simulator.async_random_delay(poll_min, poll_max)
-                await self.page.mouse.wheel(0, random.randint(poll_scroll_min, poll_scroll_max))
-
-            logger.warning("❌ Still on verification page after multiple tries.")
-            return False
-
+            return await self._poll_verification_result(vcfg)
         except Exception as e:
-            logger.error(f"❌ Error during verification handling: {e}")
-            raise NetflixAuthError(f"Critical error during verification bypass: {e}")
+            logger.error(f"❌ Error during verification: {e}")
+            raise NetflixAuthError(f"Verification bypass failed: {e}")
+
+    async def _simulate_mouse_movements(self, vcfg):
+        moves = range(random.randint(*vcfg.get("mouse_moves_range", [2, 4])))
+        for _ in moves:
+            s_x, s_y = random.randint(*vcfg.get("mouse_start_x_range", [100, 800])), random.randint(*vcfg.get("mouse_start_y_range", [100, 600]))
+            e_x, e_y = random.randint(*vcfg.get("mouse_end_x_range", [300, 1000])), random.randint(*vcfg.get("mouse_end_y_range", [200, 700]))
+            path = self.human_simulator.mouse_movement_pattern(s_x, s_y, e_x, e_y)
+            for (x, y) in path:
+                await self.page.mouse.move(x, y)
+                await asyncio.sleep(random.uniform(*vcfg.get("mouse_step_delay_s", [0.02, 0.08])))
+            await self.human_simulator.async_random_delay(*vcfg.get("mouse_pause_delay_ms", [500, 1500]))
+
+    async def _simulate_scrolling(self, vcfg):
+        iters = range(random.randint(*vcfg.get("scroll_iterations_range", [2, 4])))
+        for _ in iters:
+            amt = random.randint(*vcfg.get("scroll_amount_range", [200, 800])) * random.choice([1, -1])
+            await self.page.mouse.wheel(0, amt)
+            await self.human_simulator.async_random_delay(*vcfg.get("scroll_pause_delay_ms", [700, 1500]))
+
+    async def _solve_recaptcha(self, vcfg):
+        selectors = self.selectors.get("recaptcha_iframes", ['iframe[title*="reCAPTCHA"]', 'iframe[src*="google.com/recaptcha"]'])
+        for sel in selectors:
+            frame_el = await self.page.query_selector(sel)
+            if not frame_el:
+                continue
+            
+            frame = await frame_el.content_frame()
+            if not frame:
+                continue
+
+            await self.human_simulator.async_random_delay(*vcfg.get("recaptcha_before_click_delay_ms", [2500, 4500]))
+            
+            cb_sels = self.selectors.get("recaptcha_checkboxes", ['.recaptcha-checkbox-border', '.recaptcha-checkbox', 'div[role="checkbox"]'])
+            for cb_sel in cb_sels:
+                checkbox = await frame.query_selector(cb_sel)
+                if not checkbox:
+                    continue
+                
+                box = await checkbox.bounding_box()
+                if not box:
+                    continue
+                
+                await self.page.mouse.move(box['x'] + box['width']/2, box['y'] + box['height']/2, steps=random.randint(*vcfg.get("checkbox_mouse_steps_range", [10, 20])))
+                await self.human_simulator.async_random_delay(*vcfg.get("checkbox_pause_delay_ms", [500, 1200]))
+                await checkbox.click()
+                return True
+        return False
+
+    async def _poll_verification_result(self, vcfg):
+        poll_attempts = vcfg.get("result_poll_attempts", 12)
+        poll_delay = vcfg.get("result_poll_delay_ms", [2000, 3500])
+        scroll_range = vcfg.get("result_poll_scroll_range", [100, 400])
+        verify_keyword = self.site_cfg.get("verify_keyword", "verify")
+        
+        for _ in range(poll_attempts):
+            if verify_keyword not in self.page.url:
+                logger.info("✅ Verification passed!")
+                return True
+            await self.human_simulator.async_random_delay(*poll_delay)
+            await self.page.mouse.wheel(0, random.randint(*scroll_range))
+        return False
+
 
     async def navigate_to_home(self):
         """Navigate to the home page"""

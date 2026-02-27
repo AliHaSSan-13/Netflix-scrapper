@@ -1,10 +1,12 @@
+import os
 from copy import deepcopy
 from pathlib import Path
 
+from typing import Any
 try:
     import yaml
 except ImportError:  # pragma: no cover - defensive runtime guard
-    yaml = None
+    yaml = None # type: ignore
 
 
 DEFAULT_CONFIG = {
@@ -12,6 +14,7 @@ DEFAULT_CONFIG = {
         "state_file": "scraper_state.json",
         "cookies_file": "cookies.json",
         "max_retries": 3,
+        "download_dir": "~/Downloads",
     },
     "binaries": {
         "ffmpeg": "ffmpeg",
@@ -139,17 +142,62 @@ def _deep_merge(base, override):
     return merged
 
 
-def load_config(config_path):
-    config_file = Path(config_path)
+def get_config_dir():
+    """Get or create the .netflix-scraper directory in the user's home folder."""
+    config_dir = Path.home() / ".netflix-scraper"
+    config_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Simple migration: Copy local config/cookies if they exist and aren't in home yet
+    for filename in ["config.yaml", "cookies.json"]:
+        local_file = Path(filename)
+        home_file = config_dir / filename
+        if local_file.exists() and not home_file.exists():
+            try:
+                import shutil
+                shutil.copy2(local_file, home_file)
+                # We won't log here to avoid cluttering every run, 
+                # but it ensures the session persists.
+            except Exception:
+                pass
+                
+    return config_dir
+
+
+def load_config(config_path=None):
+    """
+    Load configuration from the specified path, the home directory, or the current directory.
+    Prioritizes home directory config if no path is provided.
+    """
+    # 1. Determine which config file to use
+    if config_path:
+        config_file = Path(config_path)
+    else:
+        # Priority: ~/.netflix-scraper/config.yaml -> ./config.yaml
+        home_config = get_config_dir() / "config.yaml"
+        local_config = Path("config.yaml")
+        config_file = home_config if home_config.exists() else local_config
+
+    # 2. Return defaults if file doesn't exist
     if not config_file.exists():
         return deepcopy(DEFAULT_CONFIG)
 
+    # 3. Load yaml if available
     if yaml is None:
         raise RuntimeError(
-            "PyYAML is required to read config.yaml. Install dependencies with: pip install -r requirements.txt"
+            "PyYAML is required to read config files. Install with: pip install PyYAML"
         )
 
     with config_file.open("r", encoding="utf-8") as f:
         loaded = yaml.safe_load(f) or {}
 
-    return _deep_merge(DEFAULT_CONFIG, loaded)
+    config = _deep_merge(DEFAULT_CONFIG, loaded)
+    
+    # Resolve relative paths in 'app' section to absolute paths in config_dir
+    # if the file was loaded from or defaults to the home folder
+    config_dir = get_config_dir()
+    for key in ["state_file", "cookies_file"]:
+        val = config.get("app", {}).get(key)
+        if val and not os.path.isabs(val):
+            config["app"][key] = str(config_dir / val)
+            
+    return config

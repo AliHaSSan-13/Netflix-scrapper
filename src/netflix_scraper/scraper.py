@@ -1,19 +1,14 @@
 import asyncio
 import os
-import subprocess
 import shutil
 import json
-from playwright.sync_api import TimeoutError as PlaywrightTimeoutError
-
 from .human_behavior import HumanBehaviorSimulator
 from .downloader import BrowserM3U8Downloader
 from .browser import BrowserManager
 from .ui import UIManager
 from . import utils
-import time
 from .logger import logger
 from .exceptions import (
-    NetflixScraperError,
     BrowserSetupError,
     NetflixAuthError,
     NavigationError,
@@ -24,62 +19,57 @@ from .exceptions import (
 
 
 class NetflixScraper:
-    def __init__(self, download_path, config=None):
+    DEFAULT_STATE: dict = {
+        "search_query": None,
+        "title_selection_index": None,
+        "language_selection": None,
+        "season_selection_index": None,
+        "episode_selections_indices": None,
+        "download_progress": {},
+        "run_completed": False,
+    }
+
+    def __init__(self, download_path, config=None, browser_type="chromium"):
         self.config = config or {}
+        self.browser_type = browser_type
         self.app_cfg = self.config.get("app", {})
         self.selectors = self.config.get("selectors", {})
         self.timeouts = self.config.get("timeouts", {})
         self.delays = self.config.get("delays", {})
+        
+        self.human_simulator = HumanBehaviorSimulator()
+        self.browser_manager = BrowserManager(self.human_simulator, config=self.config)
+        self.downloader = None
+        self.ui_manager = None
+        self.page = None
+        self.context = None
+        
+        self.m3u8_urls = []
+        self._cleanup_files = []
+        self.state_file = self.app_cfg.get("state_file", "scraper_state.json")
+        self.state = self.DEFAULT_STATE.copy()
+        
         self.capture_cfg = self.config.get("network_capture", {})
         self.stream_cfg = self.config.get("stream_matching", {})
         self.binaries_cfg = self.config.get("binaries", {})
         self.ffmpeg_cfg = self.config.get("ffmpeg", {})
-
-        self.human_simulator = HumanBehaviorSimulator()
-        self.browser_manager = BrowserManager(self.human_simulator, config=self.config)
-        self.m3u8_urls = []
-        self.downloader = None
-        self._cleanup_files = []
-        self.page = None
-        self.context = None
-        self.ui_manager = None
-        self.state_file = self.app_cfg.get("state_file", "scraper_state.json")
-        self.state = {
-            "search_query": None,
-            "title_selection_index": None,
-            "language_selection": None,
-            "season_selection_index": None,
-            "episode_selections_indices": None,
-            "download_progress": {},
-            "run_completed": False,
-        }
         self.max_retries = self.app_cfg.get("max_retries", 3)
         self.download_path = download_path
         self.video_path = None
 
     def load_state(self):
-        """Load state from a file if it exists."""
-        default_state = {
-            "search_query": None,
-            "title_selection_index": None,
-            "language_selection": None,
-            "season_selection_index": None,
-            "episode_selections_indices": None,
-            "download_progress": {},
-            "run_completed": False,
-        }
+        """Load state from file or set defaults."""
+        if not os.path.exists(self.state_file):
+            self.state = self.DEFAULT_STATE.copy()
+            return
 
-        if os.path.exists(self.state_file):
-            try:
-                with open(self.state_file, 'r') as f:
-                    loaded_state = json.load(f)
-                self.state = {**default_state, **loaded_state}
-                logger.info("🔄 Resuming from previous state.")
-            except (json.JSONDecodeError, IOError) as e:
-                logger.warning(f"⚠️ Could not load state file, starting fresh: {e}")
-                self.state = default_state
-        else:
-            self.state = default_state
+        try:
+            with open(self.state_file, 'r') as f:
+                self.state = {**self.DEFAULT_STATE, **json.load(f)}
+            logger.info("🔄 Resuming from previous state.")
+        except Exception as e:
+            logger.warning(f"⚠️ State reset: {e}")
+            self.state = self.DEFAULT_STATE.copy()
 
     def save_state(self):
         """Save the current state to a file."""
@@ -174,7 +164,7 @@ class NetflixScraper:
     async def setup(self):
         """Initialize browser and page with human-like behavior"""
         try:
-            self.page, self.context = await self.browser_manager.setup()
+            self.page, self.context = await self.browser_manager.setup(self.browser_type)
             await self.setup_request_interception()
             await self.browser_manager.set_cookies()
             self.downloader = BrowserM3U8Downloader(self.context, config=self.config)
@@ -187,7 +177,7 @@ class NetflixScraper:
         """Close browser and playwright."""
         try:
             await self.browser_manager.close()
-        except:
+        except Exception:
             pass
 
     async def setup_request_interception(self):
@@ -221,7 +211,6 @@ class NetflixScraper:
 
     async def run(self):
         """Main function to run the scraper and downloader for a single attempt."""
-
         ffmpeg_bin = self.binaries_cfg.get("ffmpeg", "ffmpeg")
         if not shutil.which(ffmpeg_bin):
             logger.error("❌ ffmpeg is not installed. Please install it to merge video and audio.")
@@ -231,167 +220,38 @@ class NetflixScraper:
             logger.info("🤖 Starting Netflix scraper...")
             await self.setup()
 
-            auth_success = await self.browser_manager.navigate_to_home()
-            if not auth_success:
+            if not await self.browser_manager.navigate_to_home():
                 raise NetflixAuthError("Failed to authenticate or bypass verification")
 
-            try:
-                await self.page.click(self.selectors.get("search_button", "button.searchTab"))
-            except PlaywrightTimeoutError:
-                raise NavigationError("Timeout while clicking search button. Element not found or not clickable.")
-            except Exception as e:
-                raise NavigationError(f"Error clicking search button: {e}")
-
-            if self.state.get("search_query"):
-                search_query = self.state["search_query"]
-                logger.info(f"Found search query in state: '{search_query}'")
-            else:
-                search_query = input("🔍 Search the movie/series you want: ")
-                self.state["search_query"] = search_query
-                self.save_state()
-
-            try:
-                await self.page.fill(self.selectors.get("search_input", "input#searchInput"), search_query)
-            except PlaywrightTimeoutError:
-                raise NavigationError("Timeout while filling search input. Element not found.")
-            except Exception as e:
-                raise NavigationError(f"Error filling search input: {e}")
-
-            search_delay_min, search_delay_max = self.delays.get("search_after_fill_ms", [500, 1500])
-            await self.human_simulator.async_random_delay(search_delay_min, search_delay_max)
-
+            await self._navigate_to_results()
+            
             titles = await self.ui_manager.get_search_results()
             if not titles:
                 logger.info("No search results found!")
                 return
 
-            if self.state.get("title_selection_index") is not None:
-                selection = self.state["title_selection_index"]
-                logger.info(f"Found title selection in state: {titles[selection]}")
-            else:
-                selection = self.ui_manager.get_user_selection(titles, "title")
-                self.state["title_selection_index"] = selection
-                self.save_state()
-
+            selection = await self._get_title_selection(titles)
             safe_title = utils.sanitize_filename(titles[selection])
             self.video_path = os.path.join(self.download_path, safe_title)
             os.makedirs(self.video_path, exist_ok=True)
 
-            results = await self.page.query_selector_all(self.selectors.get("search_results", "div.search-post"))
-            try:
-                await results[selection].click()
-            except PlaywrightTimeoutError:
-                raise NavigationError("Timeout while clicking search result. Element not found or not clickable.")
-            except Exception as e:
-                raise NavigationError(f"Error clicking search result: {e}")
-
-            if self.state.get("language_selection"):
-                lang = self.state["language_selection"]
-                logger.info(f"Found language selection in state: {lang}")
-            else:
-                lang = await self.ui_manager.get_language_selection()
-                self.state["language_selection"] = lang
-                self.save_state()
-
+            await self._select_title(selection)
+            
+            lang = await self._get_language_selection()
             await self.select_language(lang)
 
             seasons = await self.get_seasons()
-
             if seasons:
-                if self.state.get("season_selection_index") is not None:
-                    season_choice = self.state["season_selection_index"]
-                    logger.info(f"Found season selection in state: {seasons[season_choice]['text']}")
-                else:
-                    season_choice = self.ui_manager.get_user_selection([s['text'] for s in seasons], "season")
-                    self.state["season_selection_index"] = season_choice
-                    self.save_state()
-
+                season_choice = await self._get_season_selection(seasons)
                 await self.select_season(season_choice)
-
-            episodes = await self.get_episodes()
-            if episodes:
-                if self.state.get("episode_selections_indices") is not None:
-                    selected_episodes = self.state["episode_selections_indices"]
-                    logger.info(f"Found episode selection in state: {', '.join([str(i+1) for i in selected_episodes])}")
+                
+                episodes = await self.get_episodes()
+                if episodes:
+                    await self._process_episodes(episodes, seasons[season_choice]['text'])
                 else:
-                    selected_episodes = self.ui_manager.get_episode_selection(episodes)
-                    self.state["episode_selections_indices"] = selected_episodes
-                    self.save_state()
-
-                episode_elements = await self.page.query_selector_all(self.selectors.get("episode_item", "div.episode-item"))
-
-                for _, episode_index in enumerate(selected_episodes):
-                    if 0 <= episode_index < len(episode_elements):
-                        episode_data = episodes[episode_index]
-                        logger.info(f"\n🔗 Processing Episode {episode_data['number']}: {episode_data['title']}")
-
-                        self.m3u8_urls = []
-                        await self.capture_episode_m3u8(episode_elements[episode_index])
-
-                        current_episode_m3u8_urls = list(self.m3u8_urls)
-
-                        if current_episode_m3u8_urls:
-                            unique_urls = list(set(current_episode_m3u8_urls))
-                            logger.info(f"🔍 After removing duplicates: {len(unique_urls)} unique URLs for {episode_data['title']}")
-                            video_urls, audio_urls = utils.categorize_m3u8_urls(
-                                unique_urls,
-                                audio_path_fragment=self.stream_cfg.get("audio_path_fragment", "/a/"),
-                                stream_extension=self.stream_cfg.get("stream_extension", ".m3u8"),
-                                video_token=self.stream_cfg.get("video_token", "::kp"),
-                            )
-                            working_video, working_audio = utils.find_working_urls(
-                                video_urls,
-                                audio_urls,
-                                preferred_video_domain=self.stream_cfg.get("preferred_video_domain", "net51.cc"),
-                            )
-
-                            if working_video:
-                                season_text = seasons[season_choice]['text']
-                                await self._download_and_merge_episode(episode_data, working_video, working_audio, season_text=season_text)
-                            else:
-                                raise StreamCaptureError(f"Failed to find a working video stream for: {episode_data['title']}")
-                        else:
-                            logger.info(f"\n❌ No URLs were captured for episode: {episode_data['title']}")
-
-                        try:
-                            await self.page.click(self.selectors.get("back_button", "div.btn-payer-back"))
-                            # ✅ Optimization
-                            await asyncio.sleep(self.delays.get("back_navigation_wait_s", 5))
-                        except PlaywrightTimeoutError:
-                            logger.error("❌ Timeout while clicking back button. Element not found or not clickable.")
-                        except Exception as e:
-                            logger.error(f"❌ Error clicking back button: {e}")
-
+                    await self._process_movie(titles[selection])
             else:
-                movie_data = {'title': titles[selection]}
-                safe_title = utils.sanitize_filename(movie_data['title'])
-
-                if self.state["download_progress"].get(safe_title) == "completed":
-                    logger.info(f"✅ Movie '{movie_data['title']}' already downloaded. Skipping.")
-                    return
-
-                m3u8_urls = await self.handle_movie_or_single_episode()
-                if m3u8_urls:
-                    unique_urls = list(set(m3u8_urls))
-                    logger.info(f"🔍 After removing duplicates: {len(unique_urls)} unique URLs for {movie_data['title']}")
-                    video_urls, audio_urls = utils.categorize_m3u8_urls(
-                        unique_urls,
-                        audio_path_fragment=self.stream_cfg.get("audio_path_fragment", "/a/"),
-                        stream_extension=self.stream_cfg.get("stream_extension", ".m3u8"),
-                        video_token=self.stream_cfg.get("video_token", "::kp"),
-                    )
-                    working_video, working_audio = utils.find_working_urls(
-                        video_urls,
-                        audio_urls,
-                        preferred_video_domain=self.stream_cfg.get("preferred_video_domain", "net51.cc"),
-                    )
-
-                    if working_video:
-                        await self._download_and_merge_episode(movie_data, working_video, working_audio)
-                    else:
-                        logger.error(f"❌ Failed to find a working video stream for: {movie_data['title']}")
-                else:
-                    logger.info(f"\n❌ No URLs were captured for movie: {movie_data['title']}")
+                await self._process_movie(titles[selection])
 
             self.state['run_completed'] = True
             self.save_state()
@@ -399,94 +259,196 @@ class NetflixScraper:
         finally:
             await self.close()
 
+    async def _navigate_to_results(self):
+        """Handle search navigation and input."""
+        try:
+            await self.page.click(self.selectors.get("search_button", "button.searchTab"))
+        except Exception as e:
+            raise NavigationError(f"Error clicking search button: {e}")
+
+        search_query = self.state.get("search_query") or input("🔍 Search the movie/series you want: ")
+        if not self.state.get("search_query"):
+            self.state["search_query"] = search_query
+            self.save_state()
+
+        try:
+            await self.page.fill(self.selectors.get("search_input", "input#searchInput"), search_query)
+        except Exception as e:
+            raise NavigationError(f"Error filling search input: {e}")
+
+        delay = self.delays.get("search_after_fill_ms", [500, 1500])
+        await self.human_simulator.async_random_delay(*delay)
+
+    async def _get_title_selection(self, titles):
+        selection = self.state.get("title_selection_index")
+        if selection is None:
+            selection = self.ui_manager.get_user_selection(titles, "title")
+            self.state["title_selection_index"] = selection
+            self.save_state()
+        return selection
+
+    async def _select_title(self, selection):
+        results = await self.page.query_selector_all(self.selectors.get("search_results", "div.search-post"))
+        try:
+            await results[selection].click()
+        except Exception as e:
+            raise NavigationError(f"Error clicking search result: {e}")
+
+    async def _get_language_selection(self):
+        lang = self.state.get("language_selection")
+        if not lang:
+            lang = await self.ui_manager.get_language_selection()
+            self.state["language_selection"] = lang
+            self.save_state()
+        return lang
+
+    async def _get_season_selection(self, seasons):
+        choice = self.state.get("season_selection_index")
+        if choice is None:
+            choice = self.ui_manager.get_user_selection([s['text'] for s in seasons], "season")
+            self.state["season_selection_index"] = choice
+            self.save_state()
+        return choice
+
+    async def _process_episodes(self, episodes, season_text):
+        selected_episodes = self.state.get("episode_selections_indices")
+        if selected_episodes is None:
+            selected_episodes = self.ui_manager.get_episode_selection(episodes)
+            self.state["episode_selections_indices"] = selected_episodes
+            self.save_state()
+
+        episode_elements = await self.page.query_selector_all(self.selectors.get("episode_item", "div.episode-item"))
+
+        for episode_index in selected_episodes:
+            if 0 <= episode_index < len(episode_elements):
+                await self._process_single_episode(episodes[episode_index], episode_elements[episode_index], season_text)
+
+    async def _process_single_episode(self, episode_data, element, season_text):
+        logger.info(f"\n🔗 Processing Episode {episode_data['number']}: {episode_data['title']}")
+        self.m3u8_urls = []
+        await self.capture_episode_m3u8(element)
+
+        if not self.m3u8_urls:
+            logger.info(f"❌ No URLs captured for: {episode_data['title']}")
+            return
+
+        working_video, working_audio = self._extract_working_streams(episode_data['title'])
+        if working_video:
+            await self._download_and_merge_episode(episode_data, working_video, working_audio, season_text=season_text)
+        else:
+            raise StreamCaptureError(f"No working video stream for: {episode_data['title']}")
+
+        await self._go_back()
+
+    async def _process_movie(self, title):
+        movie_data = {'title': title}
+        safe_title = utils.sanitize_filename(title)
+        
+        if self.state["download_progress"].get(safe_title) == "completed":
+            logger.info(f"✅ Movie '{title}' already downloaded.")
+            return
+
+        m3u8_urls = await self.handle_movie_or_single_episode()
+        if not m3u8_urls:
+            logger.info(f"❌ No URLs captured for movie: {title}")
+            return
+
+        working_video, working_audio = self._extract_working_streams(title, m3u8_urls)
+        if working_video:
+            await self._download_and_merge_episode(movie_data, working_video, working_audio)
+        else:
+            logger.error(f"❌ No working video stream for movie: {title}")
+
+    def _extract_working_streams(self, title, urls=None):
+        target_urls = list(set(urls or self.m3u8_urls))
+        logger.info(f"🔍 Found {len(target_urls)} unique URLs for {title}")
+        
+        video_urls, audio_urls = utils.categorize_m3u8_urls(
+            target_urls,
+            audio_path_fragment=self.stream_cfg.get("audio_path_fragment", "/a/"),
+            stream_extension=self.stream_cfg.get("stream_extension", ".m3u8"),
+            video_token=self.stream_cfg.get("video_token", "::kp"),
+        )
+        return utils.find_working_urls(
+            video_urls, audio_urls,
+            preferred_video_domain=self.stream_cfg.get("preferred_video_domain", "net51.cc")
+        )
+
+    async def _go_back(self):
+        try:
+            await self.page.click(self.selectors.get("back_button", "div.btn-payer-back"))
+            await asyncio.sleep(self.delays.get("back_navigation_wait_s", 5))
+        except Exception as e:
+            logger.error(f"❌ Error clicking back button: {e}")
+
     async def _download_and_merge_episode(self, episode_data, working_video, working_audio, season_text=None):
         """Download video and audio streams and merge them."""
-        safe_title = utils.sanitize_filename(episode_data['title'])
+        title = episode_data['title']
+        safe_title = utils.sanitize_filename(title)
 
         if self.state["download_progress"].get(safe_title) == "completed":
-            logger.info(f"✅ Episode '{episode_data['title']}' already downloaded. Skipping.")
+            logger.info(f"✅ '{title}' already downloaded. Skipping.")
             return
 
         video_path = self.video_path
         if season_text:
-            season_folder_name = utils.sanitize_filename(season_text)
-            video_path = os.path.join(self.video_path, season_folder_name)
+            video_path = os.path.join(self.video_path, utils.sanitize_filename(season_text))
             os.makedirs(video_path, exist_ok=True)
 
         final_output = os.path.join(video_path, f"{safe_title}.mp4")
-        temp_video = os.path.join(video_path, f"{safe_title}.video.mp4")
-        temp_audio = os.path.join(video_path, f"{safe_title}.audio.m4a")
+        temp_v = os.path.join(video_path, f"{safe_title}.v.mp4")
+        temp_a = os.path.join(video_path, f"{safe_title}.a.m4a")
 
-        self._cleanup_files.extend([temp_video, temp_audio])
-
-        logger.info(f"\n🎬 Downloading episode: {episode_data['title']}")
+        self._cleanup_files.extend([temp_v, temp_a])
         self.state["download_progress"][safe_title] = "downloading"
         self.save_state()
 
-        video_success = False
-        if working_video:
-            video_success = await self.downloader.download_m3u8_with_ytdlp(working_video, temp_video)
-
-        if not video_success:
+        logger.info(f"\n🎬 Downloading: {title}")
+        if not await self.downloader.download_m3u8_with_ytdlp(working_video, temp_v):
             self.state["download_progress"][safe_title] = "failed"
             self.save_state()
-            raise DownloadError(f"Video download failed via yt-dlp for {episode_data['title']}")
+            raise DownloadError(f"Video download failed for {title}")
 
         audio_success = False
         if working_audio:
-            audio_success = await self.downloader.download_m3u8_with_ytdlp(working_audio, temp_audio)
-
-        if working_audio and not audio_success:
-            logger.warning(f"⚠️ Audio download failed for {episode_data['title']}. Proceeding with video only.")
+            audio_success = await self.downloader.download_m3u8_with_ytdlp(working_audio, temp_a)
+            if not audio_success:
+                logger.warning(f"⚠️ Audio download failed for {title}. Proceeding with video only.")
 
         if audio_success:
-            logger.info("🎛️ Merging video and audio streams...")
-            merge_cmd = [self.binaries_cfg.get("ffmpeg", "ffmpeg")]
-            if self.ffmpeg_cfg.get("overwrite", True):
-                merge_cmd.append("-y")
-            merge_cmd.extend(["-i", temp_video, "-i", temp_audio])
-            if self.ffmpeg_cfg.get("codec_copy", True):
-                merge_cmd.extend(["-c", "copy"])
-            if self.ffmpeg_cfg.get("movflags_faststart", True):
-                merge_cmd.extend(["-movflags", "+faststart"])
-            merge_cmd.append(final_output)
-
-            try:
-                # ✅ Optimization
-                process = await asyncio.create_subprocess_exec(
-                    *merge_cmd, 
-                    stdout=asyncio.subprocess.PIPE, 
-                    stderr=asyncio.subprocess.PIPE
-                )
-                await process.communicate()
-                if process.returncode != 0:
-                    raise MergingError(f"ffmpeg merge failed with return code {process.returncode}")
-                logger.info(f"✅ Download and merge complete: {final_output}")
-                if os.path.exists(temp_video):
-                    os.remove(temp_video)
-                if os.path.exists(temp_audio):
-                    os.remove(temp_audio)
-                self._cleanup_files = [f for f in self._cleanup_files if f not in (temp_video, temp_audio)]
-            except subprocess.CalledProcessError as e:
-                self.state["download_progress"][safe_title] = "failed"
-                self.save_state()
-                logger.error(f"ffmpeg stderr: {e.stderr.decode()}")
-                raise MergingError(f"ffmpeg merge failed: {e}")
-
-            except Exception as e:
-                self.state["download_progress"][safe_title] = "failed"
-                self.save_state()
-                raise MergingError(f"An unexpected error occurred during ffmpeg merge: {e}")
-
+            await self._merge_streams(temp_v, temp_a, final_output, safe_title)
         else:
-            logger.info("✅ Video download complete. No audio to merge or audio download failed. Renaming video file.")
-            try:
-                os.rename(temp_video, final_output)
-                self._cleanup_files = [f for f in self._cleanup_files if f != temp_video]
-            except Exception as e:
-                self.state["download_progress"][safe_title] = "failed"
-                self.save_state()
-                raise NetflixScraperError(f"An unexpected error occurred during file rename: {e}")
+            os.rename(temp_v, final_output)
+            self._cleanup_files.remove(temp_v)
+
+        self.state["download_progress"][safe_title] = "completed"
+        self.save_state()
+
+    async def _merge_streams(self, video, audio, output, safe_title):
+        logger.info("🎛️ Merging streams...")
+        cmd = [self.binaries_cfg.get("ffmpeg", "ffmpeg"), "-y", "-i", video, "-i", audio]
+        if self.ffmpeg_cfg.get("codec_copy", True):
+            cmd.extend(["-c", "copy"])
+        if self.ffmpeg_cfg.get("movflags_faststart", True):
+            cmd.extend(["-movflags", "+faststart"])
+        cmd.append(output)
+
+        try:
+            proc = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+            await proc.communicate()
+            if proc.returncode != 0:
+                raise MergingError(f"ffmpeg failed with code {proc.returncode}")
+            
+            logger.info(f"✅ Done: {output}")
+            for f in [video, audio]:
+                if os.path.exists(f):
+                    os.remove(f)
+                if f in self._cleanup_files:
+                    self._cleanup_files.remove(f)
+        except Exception as e:
+            self.state["download_progress"][safe_title] = "failed"
+            self.save_state()
+            raise MergingError(f"Merge error: {e}")
 
         self.state["download_progress"][safe_title] = "completed"
         self.save_state()
