@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netflix-scraper"
+version = "0.1.0"
+description = "A powerful CLI tool to download content from Netflix (net22.cc clone)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = {text = "MIT"}
+authors = [
+    {name = "Ali Hassan", email = "ali@example.com"},
+]
+dependencies = [
+    "playwright>=1.40.0",
+    "yt-dlp>=2023.10.13",
+    "PyYAML>=6.0.1",
+    "tqdm>=4.66.1",
+    "m3u8>=4.0.0",
+    "requests>=2.31.0",
+]
+
+[project.scripts]
+netflix-scraper = "netflix_scraper.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+"*" = ["*.yaml", "*.json"]
