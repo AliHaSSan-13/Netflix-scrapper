@@ -15,12 +15,16 @@ A powerful CLI tool to automate browser interactions, intercept stream URLs, and
 
 ### 1. Install System Dependencies
 
-You must have `ffmpeg` installed on your system to merge video and audio streams.
+You must have **ffmpeg** and **Google Chrome** installed on your system.
+- **FFmpeg**: Required to merge video and audio streams seamlessly.
+- **Google Chrome**: Required for the browser automation engine.(Any other browser can be used too but you have to pass its flags as an argument)[see CLI flags](#cli-usage--flags)
+
+#### Installation help for FFmpeg:
 - **Ubuntu/Debian**: `sudo apt install ffmpeg`
 - **macOS (Homebrew)**: `brew install ffmpeg`
 - **Windows**: [Download FFmpeg](https://ffmpeg.org/download.html) and add it to your system PATH.
 
-### 2. Basic Installation (via PyPI)
+### 2. Basic Installation (via Pip)
 
 The fastest way to get started:
 
@@ -40,7 +44,7 @@ pip install .
 
 ### 4. Run the Tool
 
-Launch the app directly from your terminal:
+After installation, you can launch the app directly from your terminal by simply typing:
 
 ```bash
 netflix-scrapper
@@ -57,7 +61,7 @@ Before scraping, you must provide a valid authenticated session for the target s
 3. Use a browser extension (like "Export Cookies") to export your active session cookies as JSON.
 4. Save the JSON file as `~/.netflix-scrapper/cookies.json`.
 
-*(The tool will automatically create the `~/.netflix-scrapper/` directory on its first run).*
+*(The tool will automatically create the `~/.netflix-scrapper/` directory on its first run).*(TODO: add a way to import cookies either from a file or from a dedicated backend service)
 
 ## Features
 
