@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "netflix-scrapper"
-version = "1.0.2"
+version = "1.0.3"
 description = "A powerful CLI tool to download content from Netflix (net22.cc clone)"
 readme = "README.md"
 requires-python = ">=3.10"
