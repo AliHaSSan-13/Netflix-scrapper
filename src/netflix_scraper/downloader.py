@@ -2,6 +2,7 @@ import asyncio
 from .logger import logger
 import re
 from tqdm import tqdm
+from .exceptions import DownloadError
 
 class BrowserM3U8Downloader:
     def __init__(self, context, config=None):
@@ -37,6 +38,7 @@ class BrowserM3U8Downloader:
 
         for attempt in range(self.retries):
             pbar = None
+            process = None
             try:
                 process = await asyncio.create_subprocess_exec(
                     *ytdlp_cmd,
@@ -95,6 +97,17 @@ class BrowserM3U8Downloader:
                     logger.warning(f"❌ yt-dlp failed on attempt {attempt + 1}/{self.retries} with return code: {process.returncode}")
                     logger.debug("".join(stdout_lines))
 
+            except (asyncio.CancelledError, KeyboardInterrupt):
+                if process:
+                    try:
+                        logger.info(f"⚠️ Terminating yt-dlp process for {output_name}...")
+                        process.terminate()
+                        await process.wait()
+                    except:
+                        pass
+                if pbar:
+                    pbar.close()
+                raise
             except Exception as e:
                 logger.error(f"❌ Exception during download attempt {attempt + 1}/{self.retries}: {e}")
                 if pbar:
@@ -102,5 +115,8 @@ class BrowserM3U8Downloader:
             
             await asyncio.sleep(self.retry_delay_seconds)
 
-        logger.error(f"❌ Failed to download after {self.retries} attempts: {m3u8_url}")
+        if attempt == self.retries - 1:
+            logger.error(f"❌ Failed to download after {self.retries} attempts: {m3u8_url}")
+            raise DownloadError(f"yt-dlp failed after {self.retries} attempts for: {m3u8_url}")
+        
         return False

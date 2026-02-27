@@ -17,4 +17,8 @@ async def main():
     await scraper.execute_with_retry()
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    try:
+        asyncio.run(main())
+    except KeyboardInterrupt:
+        print("\n👋 Program terminated by user.")
+        sys.exit(0)

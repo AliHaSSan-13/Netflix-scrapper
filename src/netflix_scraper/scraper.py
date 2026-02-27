@@ -12,6 +12,15 @@ from .ui import UIManager
 from . import utils
 import time
 from .logger import logger
+from .exceptions import (
+    NetflixScraperError,
+    BrowserSetupError,
+    NetflixAuthError,
+    NavigationError,
+    StreamCaptureError,
+    DownloadError,
+    MergingError
+)
 
 
 class NetflixScraper:
@@ -112,13 +121,33 @@ class NetflixScraper:
         while retry_count <= self.max_retries:
             try:
                 await self.run()
-
                 logger.info("✅ Scraper finished successfully.")
                 self.cleanup_state_file()
                 break
 
+            except NetflixAuthError as e:
+                logger.error(f"🔐 Authentication Error: {e}")
+                logger.info("Auth errors often require manual cookie updates. Aborting for safety.")
+                self.cleanup_state_file()
+                break
+
+            except (BrowserSetupError, MergingError) as e:
+                logger.error(f"⚙️ System/Merging Error: {e}")
+                retry_count += 1
+                if retry_count > self.max_retries:
+                    self.cleanup_temp_files()
+                    break
+                logger.info(f"🔄 Retrying after system error... ({retry_count}/{self.max_retries})")
+                await asyncio.sleep(5)
+
+            except (asyncio.CancelledError, KeyboardInterrupt):
+                logger.info("\n🛑 Termination signal received. Cleaning up...")
+                self.cleanup_temp_files()
+                self.cleanup_state_file()
+                raise
+
             except Exception as e:
-                logger.error(f"❌ An error occurred during execution: {e}")
+                logger.error(f"❌ Unexpected Error: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
 
@@ -156,7 +185,10 @@ class NetflixScraper:
 
     async def close(self):
         """Close browser and playwright."""
-        await self.browser_manager.close()
+        try:
+            await self.browser_manager.close()
+        except:
+            pass
 
     async def setup_request_interception(self):
         """Set up request interception to capture m3u8 URLs"""
@@ -201,14 +233,14 @@ class NetflixScraper:
 
             auth_success = await self.browser_manager.navigate_to_home()
             if not auth_success:
-                raise Exception("Failed to authenticate or bypass verification")
+                raise NetflixAuthError("Failed to authenticate or bypass verification")
 
             try:
                 await self.page.click(self.selectors.get("search_button", "button.searchTab"))
             except PlaywrightTimeoutError:
-                raise Exception("Timeout while clicking search button. Element not found or not clickable.")
+                raise NavigationError("Timeout while clicking search button. Element not found or not clickable.")
             except Exception as e:
-                raise Exception(f"Error clicking search button: {e}")
+                raise NavigationError(f"Error clicking search button: {e}")
 
             if self.state.get("search_query"):
                 search_query = self.state["search_query"]
@@ -221,9 +253,9 @@ class NetflixScraper:
             try:
                 await self.page.fill(self.selectors.get("search_input", "input#searchInput"), search_query)
             except PlaywrightTimeoutError:
-                raise Exception("Timeout while filling search input. Element not found.")
+                raise NavigationError("Timeout while filling search input. Element not found.")
             except Exception as e:
-                raise Exception(f"Error filling search input: {e}")
+                raise NavigationError(f"Error filling search input: {e}")
 
             search_delay_min, search_delay_max = self.delays.get("search_after_fill_ms", [500, 1500])
             await self.human_simulator.async_random_delay(search_delay_min, search_delay_max)
@@ -249,9 +281,9 @@ class NetflixScraper:
             try:
                 await results[selection].click()
             except PlaywrightTimeoutError:
-                raise Exception("Timeout while clicking search result. Element not found or not clickable.")
+                raise NavigationError("Timeout while clicking search result. Element not found or not clickable.")
             except Exception as e:
-                raise Exception(f"Error clicking search result: {e}")
+                raise NavigationError(f"Error clicking search result: {e}")
 
             if self.state.get("language_selection"):
                 lang = self.state["language_selection"]
@@ -317,13 +349,14 @@ class NetflixScraper:
                                 season_text = seasons[season_choice]['text']
                                 await self._download_and_merge_episode(episode_data, working_video, working_audio, season_text=season_text)
                             else:
-                                logger.error(f"❌ Failed to find a working video stream for: {episode_data['title']}")
+                                raise StreamCaptureError(f"Failed to find a working video stream for: {episode_data['title']}")
                         else:
                             logger.info(f"\n❌ No URLs were captured for episode: {episode_data['title']}")
 
                         try:
                             await self.page.click(self.selectors.get("back_button", "div.btn-payer-back"))
-                            time.sleep(self.delays.get("back_navigation_wait_s", 5))
+                            # ✅ Optimization
+                            await asyncio.sleep(self.delays.get("back_navigation_wait_s", 5))
                         except PlaywrightTimeoutError:
                             logger.error("❌ Timeout while clicking back button. Element not found or not clickable.")
                         except Exception as e:
@@ -397,7 +430,7 @@ class NetflixScraper:
         if not video_success:
             self.state["download_progress"][safe_title] = "failed"
             self.save_state()
-            raise Exception(f"Video download failed for {episode_data['title']}")
+            raise DownloadError(f"Video download failed via yt-dlp for {episode_data['title']}")
 
         audio_success = False
         if working_audio:
@@ -419,7 +452,15 @@ class NetflixScraper:
             merge_cmd.append(final_output)
 
             try:
-                subprocess.run(merge_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
+                # ✅ Optimization
+                process = await asyncio.create_subprocess_exec(
+                    *merge_cmd, 
+                    stdout=asyncio.subprocess.PIPE, 
+                    stderr=asyncio.subprocess.PIPE
+                )
+                await process.communicate()
+                if process.returncode != 0:
+                    raise MergingError(f"ffmpeg merge failed with return code {process.returncode}")
                 logger.info(f"✅ Download and merge complete: {final_output}")
                 if os.path.exists(temp_video):
                     os.remove(temp_video)
@@ -430,12 +471,12 @@ class NetflixScraper:
                 self.state["download_progress"][safe_title] = "failed"
                 self.save_state()
                 logger.error(f"ffmpeg stderr: {e.stderr.decode()}")
-                raise Exception("ffmpeg merge failed. Video and audio part files are kept.")
+                raise MergingError(f"ffmpeg merge failed: {e}")
 
             except Exception as e:
                 self.state["download_progress"][safe_title] = "failed"
                 self.save_state()
-                raise Exception(f"An unexpected error occurred during ffmpeg merge: {e}")
+                raise MergingError(f"An unexpected error occurred during ffmpeg merge: {e}")
 
         else:
             logger.info("✅ Video download complete. No audio to merge or audio download failed. Renaming video file.")
@@ -445,7 +486,7 @@ class NetflixScraper:
             except Exception as e:
                 self.state["download_progress"][safe_title] = "failed"
                 self.save_state()
-                raise Exception(f"An unexpected error occurred during file rename: {e}")
+                raise NetflixScraperError(f"An unexpected error occurred during file rename: {e}")
 
         self.state["download_progress"][safe_title] = "completed"
         self.save_state()

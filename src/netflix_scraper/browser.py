@@ -4,6 +4,7 @@ import json
 import os
 import random
 from .logger import logger
+from .exceptions import BrowserSetupError, NetflixAuthError, NavigationError
 
 class BrowserManager:
     def __init__(self, human_simulator, config=None):
@@ -66,7 +67,7 @@ class BrowserManager:
                 await self.browser.close()
             if self.playwright:
                 await self.playwright.stop()
-            raise
+            raise BrowserSetupError(f"Failed to initialize Playwright or Browser: {e}")
 
     async def close(self):
         """Close browser and playwright"""
@@ -105,7 +106,7 @@ class BrowserManager:
                 logger.info("✅ Cookies applied to browser context!")
             except Exception as e:
                 logger.error(f"❌ Error applying cookies to browser context: {e}")
-                raise
+                raise NetflixAuthError(f"Failed to apply cookies: {e}")
 
     async def save_fresh_cookies(self):
         """
@@ -215,7 +216,7 @@ class BrowserManager:
 
         except Exception as e:
             logger.error(f"❌ Error during verification handling: {e}")
-            return False
+            raise NetflixAuthError(f"Critical error during verification bypass: {e}")
 
     async def navigate_to_home(self):
         """Navigate to the home page"""
@@ -257,9 +258,11 @@ class BrowserManager:
             logger.info("✅ Successfully authenticated!")
             await self.save_fresh_cookies()
             return True
-        except PlaywrightTimeoutError:
-            logger.error("❌ Timeout while navigating to home or waiting for searchTab. Authentication failed.")
-            return False
+        except PlaywrightTimeoutError as e:
+            logger.error(f"❌ Timeout while navigating to home or waiting for searchTab: {e}")
+            raise NavigationError(f"Navigation timed out: {e}")
+        except NetflixAuthError:
+            raise
         except Exception as e:
             logger.error(f"❌ An unexpected error occurred during navigation or authentication: {e}")
-            return False
+            raise NavigationError(f"Unexpected navigation error: {e}")
