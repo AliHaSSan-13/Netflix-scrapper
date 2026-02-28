@@ -2,7 +2,6 @@ import os
 from copy import deepcopy
 from pathlib import Path
 
-from typing import Any
 try:
     import yaml
 except ImportError:  # pragma: no cover - defensive runtime guard

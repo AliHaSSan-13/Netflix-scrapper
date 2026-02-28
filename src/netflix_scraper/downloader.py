@@ -48,19 +48,20 @@ class BrowserM3U8Downloader:
                 )
 
                 stdout_lines = []
-                async for raw_line in process.stdout:
-                    line = raw_line.decode(errors="ignore").strip()
-                    stdout_lines.append(line)
-                    
-                    percent, speed = self._parse_progress(line)
-                    if percent is not None:
-                        if pbar is None:
-                            pbar = self._create_pbar(output_name, line)
-                        pbar.n = percent
-                        if speed:
-                            pbar.set_postfix_str(speed, refresh=False)
-                        pbar.refresh()
-
+                if process.stdout:
+                    async for raw_line in process.stdout:
+                        line = raw_line.decode(errors="ignore").strip()
+                        stdout_lines.append(line)
+                        
+                        percent, speed = self._parse_progress(line)
+                        if percent is not None:
+                            if pbar is None:
+                                pbar = self._create_pbar(output_name, line)
+                            pbar.n = percent
+                            if speed:
+                                pbar.set_postfix({"speed": speed}, refresh=True)
+                            pbar.refresh()
+                
                 await process.wait()
                 if pbar:
                     pbar.close()

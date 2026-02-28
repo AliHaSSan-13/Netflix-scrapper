@@ -36,30 +36,32 @@ class UIManager:
             results = await self.page.query_selector_all(
                 self.selectors.get("search_results", "div.search-post")
             )
-            
-            titles = []
-            for i, result in enumerate(results):
-                try:
-                    title_element = await result.query_selector(
-                        self.selectors.get("search_result_title", "p.fallback-text")
-                    )
-                    if title_element:
-                        title = await title_element.text_content()
-                        titles.append(title.strip())
-                    else:
-                        link_element = await result.query_selector(
-                            self.selectors.get("search_result_aria_link", "a[aria-label]")
+            if results:
+                titles = []
+                for i, result in enumerate(results):
+                    try:
+                        title_element = await result.query_selector(
+                            self.selectors.get("search_result_title", "p.fallback-text")
                         )
-                        if link_element:
-                            title = await link_element.get_attribute('aria-label')
+                        if title_element:
+                            title = await title_element.text_content()
                             titles.append(title.strip())
                         else:
-                            titles.append(f"Unknown Title {i+1}")
-                except Exception as e:
-                    logger.error(f"Error getting title {i+1}: {e}")
-                    titles.append(f"Error getting title {i+1}")
-            
-            return titles
+                            link_element = await result.query_selector(
+                                self.selectors.get("search_result_aria_link", "a[aria-label]")
+                            )
+                            if link_element:
+                                title = await link_element.get_attribute('aria-label')
+                                titles.append(title.strip())
+                            else:
+                                titles.append(f"Unknown Title {i+1}")
+                    except Exception as e:
+                        logger.error(f"Error getting title {i+1}: {e}")
+                        titles.append(f"Error getting title {i+1}")
+                return titles
+            else:
+                logger.warning("No search results found!")
+                return []
         except Exception as e:
             logger.error(f"Could not fetch search results: {e}")
             return []

@@ -1,4 +1,5 @@
 import asyncio
+from typing import Any
 from playwright.async_api import async_playwright, TimeoutError as PlaywrightTimeoutError
 import json
 import os
@@ -8,10 +9,10 @@ from .exceptions import BrowserSetupError, NetflixAuthError, NavigationError
 
 class BrowserManager:
     def __init__(self, human_simulator, config=None):
-        self.playwright = None
-        self.browser = None
-        self.context = None
-        self.page = None
+        self.playwright: Any = None
+        self.browser: Any = None
+        self.context: Any = None
+        self.page: Any = None
         self.human_simulator = human_simulator
         self.config = config or {}
         self.browser_cfg = self.config.get("browser", {})

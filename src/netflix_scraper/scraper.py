@@ -1,4 +1,5 @@
 import asyncio
+from typing import Any
 import os
 import shutil
 import json
@@ -16,6 +17,7 @@ from .exceptions import (
     DownloadError,
     MergingError
 )
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 
 class NetflixScraper:
@@ -39,10 +41,10 @@ class NetflixScraper:
         
         self.human_simulator = HumanBehaviorSimulator()
         self.browser_manager = BrowserManager(self.human_simulator, config=self.config)
-        self.downloader = None
-        self.ui_manager = None
-        self.page = None
-        self.context = None
+        self.downloader: Any = None
+        self.ui_manager: Any = None
+        self.page: Any = None
+        self.context: Any = None
         
         self.m3u8_urls = []
         self._cleanup_files = []
@@ -391,10 +393,13 @@ class NetflixScraper:
             return
 
         video_path = self.video_path
+        if not video_path:
+            raise DownloadError("Download path not initialized.")
+            
         if season_text:
-            video_path = os.path.join(self.video_path, utils.sanitize_filename(season_text))
+            video_path = os.path.join(video_path, utils.sanitize_filename(season_text))
             os.makedirs(video_path, exist_ok=True)
-
+            
         final_output = os.path.join(video_path, f"{safe_title}.mp4")
         temp_v = os.path.join(video_path, f"{safe_title}.v.mp4")
         temp_a = os.path.join(video_path, f"{safe_title}.a.m4a")
