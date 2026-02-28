@@ -19,9 +19,20 @@ async def run_scraper(query=None, headless=None, download_path=None, config_path
     if not ensure_binaries(browser_type):
         sys.exit(1)
 
+    import os
+    
     # Load config automatically (picks ~/.netflix-scrapper/ or local)
     config = load_config(config_path)
     
+    # Check for Cookies to avoid verification loop natively
+    cookies_path = config.get("app", {}).get("cookies_file")
+    if not cookies_path or not os.path.exists(cookies_path):
+        print(f"\n🚫 [ERROR] Authentication cookies not found at '{cookies_path}'")
+        print("Netflix-scrapper strictly requires your session cookies to bypass login.")
+        print("Please export your cookies from the target streaming site and save them as a JSON file.")
+        print("For detailed instructions, see the 'Prerequisites' section in the README.")
+        sys.exit(1)
+        
     # Apply overrides from CLI
     if headless is not None:
         config.setdefault("browser", {})["headless"] = headless

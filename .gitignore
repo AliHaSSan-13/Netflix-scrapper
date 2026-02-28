@@ -7,7 +7,6 @@ __pycache__/
 
 # State and session data
 scraper_state.json
-cookies.json
 
 # Local config
 # config.yaml (keep template, ignore actual if moving to home)

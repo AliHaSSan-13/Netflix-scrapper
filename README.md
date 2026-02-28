@@ -54,14 +54,15 @@ netflix-scrapper
 
 ## Prerequisites: Authentication Cookies
 
-Before scraping, you must provide a valid authenticated session for the target site to bypass login forms.
+> **✅ Ready to Go**: The `cookies.json` file is **included** when you install the package via `pip`! The tool uses a default set of cookies out-of-the-box. **NOTE**: The cookies are for firefox browser only.
+
+If the default cookies ever expire or stop working, you can update them using your own active session:
 
 1. Navigate to the mirror site (e.g., `https://net22.cc/home`).
 2. Sign in to your account.
-3. Use a browser extension (like "Export Cookies") to export your active session cookies as JSON.
-4. Save the JSON file as `~/.netflix-scrapper/cookies.json`.
-
-*(The tool will automatically create the `~/.netflix-scrapper/` directory on its first run).*(TODO: add a way to import cookies either from a file or from a dedicated backend service)
+3. Use a browser extension (like [Export Cookies](https://chromewebstore.google.com/detail/export-cookie-json-file-f/ghgkfdedpjofehllhlhlanmoojcieefk) or similar) to export your active session cookies as JSON.
+4. If you haven't run the tool yet, manually create the config directory: `mkdir -p ~/.netflix-scrapper/`
+5. Save the exported JSON file precisely at `~/.netflix-scrapper/cookies.json` (overwriting the default one).
 
 ## Features
 

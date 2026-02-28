@@ -147,16 +147,22 @@ def get_config_dir():
     config_dir = Path.home() / ".netflix-scrapper"
     config_dir.mkdir(parents=True, exist_ok=True)
     
+    # Directory where this file (and bundled cookies.json) resides
+    package_dir = Path(__file__).parent
+    
     # Simple migration: Copy local config/cookies if they exist and aren't in home yet
     for filename in ["config.yaml", "cookies.json"]:
         local_file = Path(filename)
+        package_file = package_dir / filename
         home_file = config_dir / filename
-        if local_file.exists() and not home_file.exists():
+        
+        if not home_file.exists():
             try:
                 import shutil
-                shutil.copy2(local_file, home_file)
-                # We won't log here to avoid cluttering every run, 
-                # but it ensures the session persists.
+                if local_file.exists():
+                    shutil.copy2(local_file, home_file)
+                elif package_file.exists():
+                    shutil.copy2(package_file, home_file)
             except Exception:
                 pass
                 
