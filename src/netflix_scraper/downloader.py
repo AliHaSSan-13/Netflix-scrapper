@@ -1,6 +1,7 @@
 import asyncio
 import os
 import re
+import math
 from tqdm import tqdm
 from .logger import logger
 from .exceptions import DownloadError
@@ -10,15 +11,33 @@ class BrowserM3U8Downloader:
         self.context = context
         cfg = (config or {}).get("downloader", {})
         binaries = (config or {}).get("binaries", {})
-        self.retries = cfg.get("retries", 3)
+        self.retries = cfg.get("retries", 5)
         self.retry_delay_seconds = cfg.get("retry_delay_seconds", 5)
-        self.concurrent_fragments = str(cfg.get("concurrent_fragments", 4))
+        self.concurrent_fragments = str(cfg.get("concurrent_fragments", 16)) # Increased for native parallel fetching
         self.user_agent = cfg.get(
             "user_agent",
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         )
         self.referer = cfg.get("referer", "https://net51.cc/")
-        self.base_flags = cfg.get("base_flags", ["--no-part", "--no-warnings", "--newline"])
+        
+        self.base_flags = cfg.get("base_flags", [
+            "--no-part", 
+            "--no-warnings", 
+            "--newline",
+            "--retries", "10",              # Resilient but not eternal
+            "--fragment-retries", "10",
+            "--skip-unavailable-fragments",
+            "--no-mtime",                   # Faster filesystem operations
+            "--hls-use-mpegts",             # Critical for mirror sites stability
+            "--http-chunk-size", "10M",     # Larger chunks reduce request overhead
+            "--buffer-size", "16M",         # High-speed buffer
+            "--resize-buffer",              # Dynamic buffer management
+            "--socket-timeout", "30",
+            "--file-access-provided",       # Optimization for modern filesystems
+            "--downloader", "m3u8:native",  # Stick to native as requested
+            "--hls-prefer-native",          # Ensure native HLS handling
+            "--retry-sleep", "fragment:exp=1:20:http&extractor:exp=1:20",
+        ])
         self.yt_dlp_binary = binaries.get("yt_dlp", "yt-dlp")
         
     async def download_m3u8_with_ytdlp(self, m3u8_url, output_name="output.mp4"):
@@ -53,13 +72,17 @@ class BrowserM3U8Downloader:
                         line = raw_line.decode(errors="ignore").strip()
                         stdout_lines.append(line)
                         
-                        percent, speed = self._parse_progress(line)
+                        percent, speed, eta = self._parse_progress(line)
                         if percent is not None:
                             if pbar is None:
                                 pbar = self._create_pbar(output_name, line)
                             pbar.n = percent
+                            postfix = {}
                             if speed:
-                                pbar.set_postfix({"speed": speed}, refresh=True)
+                                postfix["speed"] = speed
+                            if eta:
+                                postfix["eta"] = eta
+                            pbar.set_postfix(postfix, refresh=True)
                             pbar.refresh()
                 
                 await process.wait()
@@ -71,7 +94,6 @@ class BrowserM3U8Downloader:
                     return True
                 
                 logger.warning(f"❌ yt-dlp failed (attempt {attempt+1}/{self.retries}) Code: {process.returncode}")
-                # Log last few lines of stdout if it failed
                 for line in stdout_lines[-5:]:
                     logger.debug(f"yt-dlp: {line}")
 
@@ -91,16 +113,19 @@ class BrowserM3U8Downloader:
                 if pbar:
                     pbar.close()
             
-            await asyncio.sleep(self.retry_delay_seconds)
+            delay = self.retry_delay_seconds * (math.pow(2, attempt))
+            logger.info(f"⌛ Retrying after {delay:.1f} seconds...")
+            await asyncio.sleep(delay)
 
-        if attempt == self.retries - 1:
-            logger.error(f"❌ Failed to download after {self.retries} attempts: {m3u8_url}")
-            raise DownloadError(f"yt-dlp failed after {self.retries} attempts for: {m3u8_url}")
+        logger.error(f"❌ Failed to download after {self.retries} attempts: {m3u8_url}")
+        raise DownloadError(f"yt-dlp failed after {self.retries} attempts for: {m3u8_url}")
         
         return False
+    
     def _parse_progress(self, line):
         percent = None
         speed = ""
+        eta = ""
         
         if m := re.search(r"\[download\]\s+(\d+\.\d+)%", line):
             percent = float(m.group(1))
@@ -108,7 +133,10 @@ class BrowserM3U8Downloader:
         if m := re.search(r"at\s+([\d\.]+(?:[kKMmGg]iB|B)/s)", line):
             speed = m.group(1)
             
-        return percent, speed
+        if m := re.search(r"ETA\s+([\d:]+)", line):
+            eta = m.group(1)
+            
+        return percent, speed, eta
 
     def _create_pbar(self, path, first_line):
         name = os.path.basename(path)

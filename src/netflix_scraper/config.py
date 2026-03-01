@@ -33,6 +33,7 @@ DEFAULT_CONFIG = {
         "stream_extension": ".m3u8",
         "video_token": "::kp",
         "preferred_video_domain": "net51.cc",
+        "preferred_qualities": ["1080p", "720p", "480p", "360p"]
     },
     "browser": {
         "headless": False,
@@ -116,9 +117,9 @@ DEFAULT_CONFIG = {
         "preferred_languages": ["english", "hindi"],
     },
     "downloader": {
-        "retries": 3,
+        "retries": 5,
         "retry_delay_seconds": 5,
-        "concurrent_fragments": 4,
+        "concurrent_fragments": 16,
         "user_agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "referer": "https://net51.cc/",
         "base_flags": ["--no-part", "--no-warnings", "--newline"],

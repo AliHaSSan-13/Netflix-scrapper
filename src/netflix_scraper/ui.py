@@ -139,3 +139,19 @@ class UIManager:
         except Exception as e:
             logger.warning(f"⚠️ Could not fetch language list: {e}")
             return default_lang
+
+    async def pause_video(self):
+        """Pause the video by clicking the center of the screen."""
+        try:
+            viewport = self.page.viewport_size
+            if viewport:
+                cx = viewport["width"] // 2
+                cy = viewport["height"] // 2
+            else:
+                cx = self.config.get("browser", {}).get("viewport", {}).get("width", 1200) // 2
+                cy = self.config.get("browser", {}).get("viewport", {}).get("height", 800) // 2
+
+            #logger.info(f"⏸️  Pausing video: clicking center of screen ({cx}, {cy})")
+            await self.page.mouse.click(cx, cy)
+        except Exception as e:
+            logger.warning(f"⚠️ Could not pause video: {e}")

@@ -373,7 +373,8 @@ class NetflixScraper:
         )
         return utils.find_working_urls(
             video_urls, audio_urls,
-            preferred_video_domain=self.stream_cfg.get("preferred_video_domain", "net51.cc")
+            preferred_video_domain=self.stream_cfg.get("preferred_video_domain", "net51.cc"),
+            preferred_qualities=self.stream_cfg.get("preferred_qualities", ["1080p", "720p", "480p", "360p"])
         )
 
     async def _go_back(self):
@@ -553,7 +554,12 @@ class NetflixScraper:
                 await self.page.wait_for_timeout(wait_ms)
 
             new_urls = len(self.m3u8_urls) - current_count
-            logger.info(f"📡 Captured {new_urls} new URLs for this episode")
+            if new_urls > 0:
+                logger.info(f"📡 Captured {new_urls} new URL(s)")#Pause video
+                await self.ui_manager.pause_video()
+                await self.page.wait_for_timeout(self.delays.get("pause_after_capture_ms", 500))
+            else:
+                logger.info("📡 No new URLs captured for this episode.")
             return new_urls > 0
         except PlaywrightTimeoutError:
             logger.warning("❌ Timeout while waiting for episode to load after click.")
@@ -583,7 +589,9 @@ class NetflixScraper:
 
         if len(self.m3u8_urls) > original_url_count:
             new_urls = self.m3u8_urls[original_url_count:]
-            logger.info(f"✅ Successfully captured {len(new_urls)} URLs")
+            logger.info(f"✅ Successfully captured {len(new_urls)} URLs — pausing video...")
+            await self.ui_manager.pause_video()
+            await self.page.wait_for_timeout(self.delays.get("pause_after_capture_ms", 500))
 
             m3u8_indicator = self.capture_cfg.get("m3u8_indicator", ".m3u8")
             skip_keywords = self.capture_cfg.get("skip_keywords", ["ping.gif"])
