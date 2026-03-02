@@ -125,7 +125,7 @@ class UIManager:
                     logger.info(f"{i}. {lang}")
                 logger.info("A. Show all")
 
-                choice = input("\nSelect (1/2/A): ").strip().lower()
+                choice = input(f"\nSelect ({'/'.join(map(str, range(1, len(preferred)+1)))}/A): ").strip().lower()
                 if choice != 'a':
                     try:
                         return preferred[int(choice)-1]
